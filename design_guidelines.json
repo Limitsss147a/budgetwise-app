@@ -1,0 +1,115 @@
+{
+  "theme_archetype": {
+    "domain": "Finance, Personal Finance Tracking",
+    "theme": "LIGHT",
+    "archetype": "1 (Organic & Earthy)",
+    "reasoning": "A personal finance app requires trust, stability, and calm. The organic and earthy archetype avoids the cold, clinical feel of traditional banking apps and the aggressive 'fintech bro' dark modes. It utilizes warm, grounded colors to reassure users and create a friction-free experience."
+  },
+  "typography": {
+    "strategy": "The 'Human' Touch. Avoid Inter for headings. Use an expressive geometric sans for headings and a highly legible body font to balance character with data clarity.",
+    "primary_font": "Outfit",
+    "secondary_font": "Manrope",
+    "headings": {
+      "h1": "text-4xl sm:text-5xl font-bold tracking-tight text-[#1A4D2E]",
+      "h2": "text-2xl sm:text-3xl font-semibold tracking-tight text-[#1A4D2E]",
+      "h3": "text-xl sm:text-2xl font-medium tracking-tight text-[#1A4D2E]",
+      "h4": "text-lg sm:text-xl font-medium text-[#1A4D2E]"
+    },
+    "body": {
+      "base": "text-base text-[#4A4A4A] leading-relaxed",
+      "small": "text-sm text-[#7D7D7D]",
+      "label": "text-xs font-semibold uppercase tracking-[0.2em] text-[#7D8F69]"
+    }
+  },
+  "colors": {
+    "background": {
+      "primary": "#F9F9F6",
+      "secondary": "#FFFFFF",
+      "tertiary": "#F4EFEB"
+    },
+    "surface": {
+      "card": "#FFFFFF",
+      "glass": "rgba(255, 255, 255, 0.7)"
+    },
+    "text": {
+      "primary": "#1A4D2E",
+      "secondary": "#4A4A4A",
+      "tertiary": "#7D7D7D",
+      "inverse": "#FFFFFF",
+      "amount_positive": "#3A6E4B",
+      "amount_negative": "#4A4A4A"
+    },
+    "brand": {
+      "primary": "#1A4D2E",
+      "secondary": "#7D8F69",
+      "accent": "#E86A33",
+      "highlight": "#C2A878"
+    },
+    "status": {
+      "success": "#3A6E4B",
+      "warning": "#E86A33",
+      "error": "#D34A3E",
+      "info": "#4A8B9A"
+    },
+    "chart_colors": [
+      "#1A4D2E",
+      "#7D8F69",
+      "#C2A878",
+      "#E86A33",
+      "#4A8B9A",
+      "#9DB0A3",
+      "#D9C7B6",
+      "#F1A075"
+    ]
+  },
+  "spacing_and_layout": {
+    "strategy": "Mobile-First generously spaced Bento Grid. Avoid claustrophobic data tables. Every numeric value must breathe.",
+    "padding": {
+      "screen": "p-6",
+      "card": "p-5",
+      "element": "p-4"
+    },
+    "gap": {
+      "small": "gap-2",
+      "medium": "gap-4",
+      "large": "gap-6",
+      "xl": "gap-8"
+    },
+    "radius": {
+      "small": "rounded-lg",
+      "card": "rounded-2xl",
+      "button": "rounded-xl",
+      "full": "rounded-full"
+    },
+    "shadows": {
+      "card": "shadow-[0_8px_30px_rgba(26,77,46,0.04)]",
+      "floating": "shadow-[0_12px_40px_rgba(26,77,46,0.08)]",
+      "none": "shadow-none"
+    }
+  },
+  "components_instructions": {
+    "cards": "Use flat white (#FFFFFF) backgrounds with subtle ambient shadow (`shadow-card`) and an invisible 1px border (`border-[#F0EBE1]`). Generous padding (`p-5` or `p-6`). Do not use heavily rounded or bubbly styles; `rounded-2xl` is the maximum radius.",
+    "buttons": "Primary CTA uses Brand Primary (#1A4D2E) with white text. Secondary CTA uses light sage (#F4F6F0) with deep green text. Danger/Delete actions use Terracotta (#E86A33). Height should be `h-14` for touch targets.",
+    "inputs": "Adapt Shadcn styling for React Native using NativeWind. Flat soft gray background (#F9F9F6) or white with 1px border. Focus state must have a 2px border of Primary Color (#1A4D2E) and text color #1A4D2E.",
+    "bottom_tab_navigator": "Use minimalist icons in a clean, label-less or small-label bottom sheet style. Active state should be Primary color (#1A4D2E) with a subtle dot or line under it. Inactive is muted gray (#7D7D7D).",
+    "charts": "Use the provided earthy chart colors. Bar charts should have slightly rounded tops (4px). Donut charts should use a stroke gap between segments for clarity. Line charts for trends should use soft curved lines (bezier). Use libraries like `react-native-svg-charts` or `react-native-chart-kit`.",
+    "progress_bars": "For budget limits: Background track is light gray (#EAEAEA). Fill uses Success (#3A6E4B) up to 80%, Warning (#E86A33) from 80% to 100%, and Error (#D34A3E) above 100%.",
+    "swipe_actions": "Swipe right to edit (Info/Blue or Primary/Green), swipe left to delete (Error/Red).",
+    "animations": "Use `react-native-reanimated` or `moti` for animated balance numbers, entrance staggers, and chart loading.",
+    "data_testid": "Apply `testID` attribute for React Native elements with kebab-case role-based names (e.g., `testID=\"add-transaction-button\"`). Include these on all touchables and key text nodes."
+  },
+  "media": [
+    {
+      "category": "onboarding_hero",
+      "url": "https://images.pexels.com/photos/11391951/pexels-photo-11391951.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "description": "A small plant sprouting from stacked silver coins, symbolizing growth in finance. Used for onboarding or hero sections to establish the 'Organic & Earthy' theme."
+    },
+    {
+      "category": "empty_state",
+      "url": "https://images.pexels.com/photos/6775160/pexels-photo-6775160.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "description": "A small plant growing in a glass jar filled with coins. Used for empty states when no transactions are present."
+    }
+  ],
+  "icons_strategy": "Use `lucide-react-native`. Outline style, stroke width 1.5. Earthy tones for icons.",
+  "tech_stack_adapter_notes": "Since the project is React Native Expo, translate Tailwind classes using NativeWind. Build UI components with standard `View`, `Text`, `TouchableOpacity`, `TextInput`, `ScrollView`. For form selection elements (like category picker), build a custom BottomSheet modal instead of using standard web `<select>`."
+}

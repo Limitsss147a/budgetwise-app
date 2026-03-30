@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, TextInput, Alert, RefreshControl, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -6,6 +6,7 @@ import { useFocusEffect } from 'expo-router';
 import { api } from '../../src/utils/api';
 import { formatRupiah, getCurrentMonth, formatMonthYear, getMonthOffset, formatAmountInput, parseAmountInput } from '../../src/utils/format';
 import { useTheme } from '../../src/contexts/ThemeContext';
+import { fonts } from '../../src/constants/fonts';
 import type { Budget, Category, CategoryBreakdown } from '../../src/types';
 
 export default function BudgetScreen() {
@@ -32,9 +33,7 @@ export default function BudgetScreen() {
 
   useFocusEffect(useCallback(() => { setLoading(true); loadData(); }, [loadData]));
 
-  const getBudgetForCat = (catId: string) => budgets.find(b => b.category_id === catId);
   const getSpentForCat = (catId: string) => breakdown.find(b => b.category_id === catId)?.total || 0;
-
   const totalBudget = budgets.reduce((s, b) => s + b.amount, 0);
   const totalSpent = budgets.reduce((s, b) => s + getSpentForCat(b.category_id), 0);
 
@@ -64,48 +63,45 @@ export default function BudgetScreen() {
   };
 
   if (loading) {
-    return <SafeAreaView style={[s.container, { backgroundColor: colors.bg }]}><View style={s.center}><ActivityIndicator size="large" color={colors.brand} /></View></SafeAreaView>;
+    return <SafeAreaView style={[st.container, { backgroundColor: colors.bg }]}><View style={st.center}><ActivityIndicator size="large" color={colors.brand} /></View></SafeAreaView>;
   }
 
   return (
-    <SafeAreaView style={[s.container, { backgroundColor: colors.bg }]} testID="budget-screen">
-      <ScrollView showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} tintColor={colors.brand} />} contentContainerStyle={s.scroll}>
-        <View style={s.headerRow}>
-          <Text style={[s.screenTitle, { color: colors.text }]}>Anggaran</Text>
-          <TouchableOpacity testID="add-budget-btn" style={[s.addBtn, { backgroundColor: colors.accent }]} onPress={() => setShowModal(true)}>
+    <SafeAreaView style={[st.container, { backgroundColor: colors.bg }]} testID="budget-screen">
+      <ScrollView showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} tintColor={colors.brand} />} contentContainerStyle={st.scroll}>
+        <View style={st.headerRow}>
+          <Text style={[st.screenTitle, { color: colors.text, fontFamily: fonts.bold }]}>Anggaran</Text>
+          <TouchableOpacity testID="add-budget-btn" style={[st.addBtn, { backgroundColor: colors.accent }]} onPress={() => setShowModal(true)}>
             <Ionicons name="add" size={22} color="#FFF" />
           </TouchableOpacity>
         </View>
 
-        {/* Bulan Navigator */}
-        <View style={s.monthNav}>
+        <View style={st.monthNav}>
           <TouchableOpacity testID="budget-prev-month" onPress={() => setMonth(m => getMonthOffset(m, -1))}>
             <Ionicons name="chevron-back" size={22} color={colors.text} />
           </TouchableOpacity>
-          <Text style={[s.monthText, { color: colors.text }]}>{formatMonthYear(month)}</Text>
+          <Text style={[st.monthText, { color: colors.text, fontFamily: fonts.semiBold }]}>{formatMonthYear(month)}</Text>
           <TouchableOpacity testID="budget-next-month" onPress={() => setMonth(m => getMonthOffset(m, 1))}>
             <Ionicons name="chevron-forward" size={22} color={colors.text} />
           </TouchableOpacity>
         </View>
 
-        {/* Ringkasan Total */}
         {budgets.length > 0 && (
-          <View style={[s.totalCard, { backgroundColor: colors.brand }]}>
-            <Text style={s.totalLabel}>Total Anggaran</Text>
-            <Text style={s.totalVal}>{formatRupiah(totalBudget)}</Text>
-            <View style={s.progressBg}>
-              <View style={[s.progressFill, { width: `${Math.min(100, (totalSpent / totalBudget) * 100)}%`, backgroundColor: getProgressColor((totalSpent / totalBudget) * 100) }]} />
+          <View style={[st.totalCard, { backgroundColor: colors.brand }]}>
+            <Text style={[st.totalLabel, { fontFamily: fonts.regular }]}>Total Anggaran</Text>
+            <Text style={[st.totalVal, { fontFamily: fonts.bold }]}>{formatRupiah(totalBudget)}</Text>
+            <View style={st.progressBg}>
+              <View style={[st.progressFill, { width: `${Math.min(100, (totalSpent / totalBudget) * 100)}%`, backgroundColor: getProgressColor((totalSpent / totalBudget) * 100) }]} />
             </View>
-            <Text style={s.totalSub}>Terpakai: {formatRupiah(totalSpent)} ({totalBudget > 0 ? Math.round((totalSpent / totalBudget) * 100) : 0}%)</Text>
+            <Text style={[st.totalSub, { fontFamily: fonts.regular }]}>Terpakai: {formatRupiah(totalSpent)} ({totalBudget > 0 ? Math.round((totalSpent / totalBudget) * 100) : 0}%)</Text>
           </View>
         )}
 
-        {/* Budget per Kategori */}
         {budgets.length === 0 ? (
-          <View style={s.empty}>
+          <View style={st.empty}>
             <Ionicons name="wallet-outline" size={56} color={colors.textTertiary} />
-            <Text style={[s.emptyTitle, { color: colors.text }]}>Belum ada anggaran</Text>
-            <Text style={[s.emptySub, { color: colors.textTertiary }]}>Atur anggaran per kategori untuk kontrol pengeluaran</Text>
+            <Text style={[st.emptyTitle, { color: colors.text, fontFamily: fonts.semiBold }]}>Belum ada anggaran</Text>
+            <Text style={[st.emptySub, { color: colors.textTertiary, fontFamily: fonts.regular }]}>Atur anggaran per kategori untuk kontrol pengeluaran</Text>
           </View>
         ) : (
           budgets.map(budget => {
@@ -113,23 +109,23 @@ export default function BudgetScreen() {
             const spent = getSpentForCat(budget.category_id);
             const pct = budget.amount > 0 ? (spent / budget.amount) * 100 : 0;
             return (
-              <View key={budget.id} style={[s.budgetCard, { backgroundColor: colors.bgCard, borderColor: colors.border }]} testID={`budget-${budget.id}`}>
-                <View style={s.budgetHeader}>
-                  <View style={[s.catIcon, { backgroundColor: (cat?.color || '#7D7D7D') + '18' }]}>
+              <View key={budget.id} style={[st.budgetCard, { backgroundColor: colors.bgCard, borderColor: colors.border }]} testID={`budget-${budget.id}`}>
+                <View style={st.budgetHeader}>
+                  <View style={[st.catIcon, { backgroundColor: (cat?.color || '#7D7D7D') + '18' }]}>
                     <Ionicons name={(cat?.icon || 'ellipsis-horizontal') as any} size={18} color={cat?.color || '#7D7D7D'} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={[s.catName, { color: colors.text }]}>{cat?.name || 'Lainnya'}</Text>
-                    <Text style={[s.budgetRange, { color: colors.textTertiary }]}>{formatRupiah(spent)} / {formatRupiah(budget.amount)}</Text>
+                    <Text style={[st.catName, { color: colors.text, fontFamily: fonts.medium }]}>{cat?.name || 'Lainnya'}</Text>
+                    <Text style={[st.budgetRange, { color: colors.textTertiary, fontFamily: fonts.regular }]}>{formatRupiah(spent)} / {formatRupiah(budget.amount)}</Text>
                   </View>
                   <TouchableOpacity testID={`delete-budget-${budget.id}`} onPress={() => handleDeleteBudget(budget)}>
                     <Ionicons name="close-circle-outline" size={20} color={colors.expense} />
                   </TouchableOpacity>
                 </View>
-                <View style={[s.progressBgCard, { backgroundColor: colors.bgSecondary }]}>
-                  <View style={[s.progressFill, { width: `${Math.min(100, pct)}%`, backgroundColor: getProgressColor(pct) }]} />
+                <View style={[st.progressBgCard, { backgroundColor: colors.bgSecondary }]}>
+                  <View style={[st.progressFill, { width: `${Math.min(100, pct)}%`, backgroundColor: getProgressColor(pct) }]} />
                 </View>
-                <Text style={[s.pctText, { color: getProgressColor(pct) }]}>{Math.round(pct)}%{pct >= 100 ? ' ⚠️ Melebihi!' : pct >= 80 ? ' ⚠️ Hampir Habis' : ''}</Text>
+                <Text style={[st.pctText, { color: getProgressColor(pct), fontFamily: fonts.semiBold }]}>{Math.round(pct)}%{pct >= 100 ? ' Melebihi!' : pct >= 80 ? ' Hampir Habis' : ''}</Text>
               </View>
             );
           })
@@ -137,38 +133,37 @@ export default function BudgetScreen() {
         <View style={{ height: 30 }} />
       </ScrollView>
 
-      {/* Modal Tambah Budget */}
       <Modal visible={showModal} transparent animationType="slide">
-        <View style={s.modalOverlay}>
-          <View style={[s.modalContent, { backgroundColor: colors.bgCard }]}>
-            <View style={s.modalHeader}>
-              <Text style={[s.modalTitle, { color: colors.text }]}>Atur Anggaran</Text>
+        <View style={st.modalOverlay}>
+          <View style={[st.modalContent, { backgroundColor: colors.bgCard }]}>
+            <View style={st.modalHeader}>
+              <Text style={[st.modalTitle, { color: colors.text, fontFamily: fonts.semiBold }]}>Atur Anggaran</Text>
               <TouchableOpacity testID="close-budget-modal" onPress={() => setShowModal(false)}>
                 <Ionicons name="close" size={24} color={colors.text} />
               </TouchableOpacity>
             </View>
 
-            <Text style={[s.inputLabel, { color: colors.textTertiary }]}>Kategori</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.catScroll}>
+            <Text style={[st.inputLabel, { color: colors.textTertiary, fontFamily: fonts.medium }]}>Kategori</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={st.catScroll}>
               {categories.map(cat => (
                 <TouchableOpacity key={cat.id} testID={`budget-cat-${cat.id}`}
-                  style={[s.catPill, { backgroundColor: colors.bgSecondary, borderColor: colors.border }, selCat === cat.id && { backgroundColor: cat.color + '30', borderColor: cat.color }]}
+                  style={[st.catPill, { backgroundColor: colors.bgSecondary, borderColor: colors.border }, selCat === cat.id && { backgroundColor: cat.color + '30', borderColor: cat.color }]}
                   onPress={() => setSelCat(cat.id)}>
                   <Ionicons name={cat.icon as any} size={16} color={cat.color} />
-                  <Text style={[s.catPillText, { color: colors.textSecondary }, selCat === cat.id && { color: cat.color }]} numberOfLines={1}>{cat.name}</Text>
+                  <Text style={[st.catPillText, { color: colors.textSecondary, fontFamily: fonts.regular }, selCat === cat.id && { color: cat.color }]} numberOfLines={1}>{cat.name}</Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
 
-            <Text style={[s.inputLabel, { color: colors.textTertiary }]}>Jumlah Anggaran</Text>
-            <View style={[s.amtRow, { backgroundColor: colors.bgSecondary, borderColor: colors.border }]}>
-              <Text style={[s.rupiah, { color: colors.text }]}>Rp</Text>
-              <TextInput testID="budget-amount-input" style={[s.amtInput, { color: colors.text }]} keyboardType="numeric" placeholder="0"
+            <Text style={[st.inputLabel, { color: colors.textTertiary, fontFamily: fonts.medium }]}>Jumlah Anggaran</Text>
+            <View style={[st.amtRow, { backgroundColor: colors.bgSecondary, borderColor: colors.border }]}>
+              <Text style={[st.rupiah, { color: colors.text, fontFamily: fonts.semiBold }]}>Rp</Text>
+              <TextInput testID="budget-amount-input" style={[st.amtInput, { color: colors.text, fontFamily: fonts.semiBold }]} keyboardType="numeric" placeholder="0"
                 value={formatAmountInput(budgetAmt)} onChangeText={t => setBudgetAmt(t.replace(/\D/g, ''))} placeholderTextColor={colors.textTertiary} />
             </View>
 
-            <TouchableOpacity testID="save-budget-btn" style={[s.saveBtn, { backgroundColor: colors.brand }]} onPress={handleSaveBudget} activeOpacity={0.8}>
-              <Text style={s.saveBtnText}>Simpan Anggaran</Text>
+            <TouchableOpacity testID="save-budget-btn" style={[st.saveBtn, { backgroundColor: colors.brand }]} onPress={handleSaveBudget} activeOpacity={0.8}>
+              <Text style={[st.saveBtnText, { fontFamily: fonts.semiBold }]}>Simpan Anggaran</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -177,18 +172,18 @@ export default function BudgetScreen() {
   );
 }
 
-const s = StyleSheet.create({
+const st = StyleSheet.create({
   container: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   scroll: { padding: 20, paddingBottom: 40 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  screenTitle: { fontSize: 24, fontWeight: '700' },
+  screenTitle: { fontSize: 24 },
   addBtn: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
   monthNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, gap: 16 },
-  monthText: { fontSize: 15, fontWeight: '600' },
+  monthText: { fontSize: 15 },
   totalCard: { borderRadius: 16, padding: 20, marginBottom: 16 },
   totalLabel: { fontSize: 12, color: 'rgba(255,255,255,0.6)' },
-  totalVal: { fontSize: 24, fontWeight: '700', color: '#FFF', marginVertical: 4 },
+  totalVal: { fontSize: 24, color: '#FFF', marginVertical: 4 },
   totalSub: { fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 8 },
   progressBg: { height: 8, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 4, marginTop: 8, overflow: 'hidden' },
   progressBgCard: { height: 8, borderRadius: 4, marginTop: 8, overflow: 'hidden' },
@@ -196,23 +191,23 @@ const s = StyleSheet.create({
   budgetCard: { borderRadius: 14, padding: 16, marginBottom: 12, borderWidth: 1 },
   budgetHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
   catIcon: { width: 36, height: 36, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
-  catName: { fontSize: 14, fontWeight: '600' },
+  catName: { fontSize: 14 },
   budgetRange: { fontSize: 12, marginTop: 2 },
-  pctText: { fontSize: 12, fontWeight: '600', marginTop: 6 },
+  pctText: { fontSize: 12, marginTop: 6 },
   empty: { alignItems: 'center', paddingTop: 60 },
-  emptyTitle: { fontSize: 16, fontWeight: '600', marginTop: 16 },
+  emptyTitle: { fontSize: 16, marginTop: 16 },
   emptySub: { fontSize: 13, marginTop: 4, textAlign: 'center', paddingHorizontal: 32 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
   modalContent: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  modalTitle: { fontSize: 18, fontWeight: '600' },
-  inputLabel: { fontSize: 13, fontWeight: '500', marginBottom: 8, marginTop: 4 },
+  modalTitle: { fontSize: 18 },
+  inputLabel: { fontSize: 13, marginBottom: 8, marginTop: 4 },
   catScroll: { marginBottom: 16 },
   catPill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, borderWidth: 1, marginRight: 8 },
   catPillText: { fontSize: 12 },
   amtRow: { flexDirection: 'row', alignItems: 'center', borderRadius: 12, paddingHorizontal: 14, borderWidth: 1, marginBottom: 20 },
-  rupiah: { fontSize: 16, fontWeight: '600', marginRight: 8 },
-  amtInput: { flex: 1, fontSize: 20, fontWeight: '600', paddingVertical: 14 },
+  rupiah: { fontSize: 16, marginRight: 8 },
+  amtInput: { flex: 1, fontSize: 20, paddingVertical: 14 },
   saveBtn: { borderRadius: 14, paddingVertical: 16, alignItems: 'center' },
-  saveBtnText: { fontSize: 16, fontWeight: '600', color: '#FFF' },
+  saveBtnText: { fontSize: 16, color: '#FFF' },
 });

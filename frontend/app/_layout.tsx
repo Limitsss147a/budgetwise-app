@@ -1,11 +1,15 @@
 import { Stack, useRouter, useSegments } from 'expo-router';
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import * as SplashScreen from 'expo-splash-screen';
+import { useFonts, Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, Poppins_700Bold } from '@expo-google-fonts/poppins';
 import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
 import { ThemeProvider, useTheme } from '../src/contexts/ThemeContext';
 import { api } from '../src/utils/api';
+
+SplashScreen.preventAutoHideAsync();
 
 function PinLock({ onUnlock }: { onUnlock: () => void }) {
   const { colors } = useTheme();
@@ -26,14 +30,14 @@ function PinLock({ onUnlock }: { onUnlock: () => void }) {
     <SafeAreaView style={[ps.container, { backgroundColor: colors.bg }]}>
       <View style={ps.content}>
         <View style={[ps.iconCircle, { backgroundColor: colors.brand }]}><Text style={ps.lockIcon}>🔒</Text></View>
-        <Text style={[ps.title, { color: colors.text }]}>Masukkan PIN</Text>
-        <Text style={[ps.subtitle, { color: colors.textTertiary }]}>Masukkan 6 digit PIN Anda</Text>
+        <Text style={[ps.title, { color: colors.text, fontFamily: 'Poppins_700Bold' }]}>Masukkan PIN</Text>
+        <Text style={[ps.subtitle, { color: colors.textTertiary, fontFamily: 'Poppins_400Regular' }]}>Masukkan 6 digit PIN Anda</Text>
         <View style={ps.dotsRow}>{[0,1,2,3,4,5].map(i => <View key={i} style={[ps.dot, { borderColor: colors.brand }, i < pin.length && { backgroundColor: colors.brand }]} />)}</View>
-        {error ? <Text style={ps.error}>{error}</Text> : <View style={{ height: 20 }} />}
+        {error ? <Text style={[ps.error, { fontFamily: 'Poppins_500Medium' }]}>{error}</Text> : <View style={{ height: 20 }} />}
         <View style={ps.keypad}>{keys.map((k, i) => (
           <TouchableOpacity key={i} testID={`pin-key-${k||'empty'}`} style={[ps.key, { backgroundColor: colors.bgCard }, !k && { backgroundColor: 'transparent' }]}
             onPress={() => { if (k === 'del') { setPin(p => p.slice(0,-1)); setError(''); } else if (k) handleDot(k); }} disabled={!k} activeOpacity={0.6}>
-            <Text style={[ps.keyText, { color: colors.text }]}>{k === 'del' ? '⌫' : k}</Text>
+            <Text style={[ps.keyText, { color: colors.text, fontFamily: 'Poppins_600SemiBold' }]}>{k === 'del' ? '⌫' : k}</Text>
           </TouchableOpacity>
         ))}</View>
       </View>
@@ -89,6 +93,23 @@ function AuthGate() {
 }
 
 export default function RootLayout() {
+  const [fontsLoaded] = useFonts({
+    Poppins_400Regular,
+    Poppins_500Medium,
+    Poppins_600SemiBold,
+    Poppins_700Bold,
+  });
+
+  useEffect(() => {
+    if (fontsLoaded) {
+      SplashScreen.hideAsync();
+    }
+  }, [fontsLoaded]);
+
+  if (!fontsLoaded) {
+    return null;
+  }
+
   return (
     <ThemeProvider>
       <AuthProvider>
@@ -107,5 +128,5 @@ const ps = StyleSheet.create({
   error: { color: '#D34A3E', fontSize: 13, height: 20 },
   keypad: { flexDirection: 'row', flexWrap: 'wrap', width: 264, justifyContent: 'center', marginTop: 16 },
   key: { width: 72, height: 72, borderRadius: 36, justifyContent: 'center', alignItems: 'center', margin: 8 },
-  keyText: { fontSize: 26, fontWeight: '600' },
+  keyText: { fontSize: 26 },
 });

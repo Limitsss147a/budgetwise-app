@@ -6,6 +6,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { api } from '../src/utils/api';
 import { formatAmountInput, parseAmountInput } from '../src/utils/format';
 import { useTheme } from '../src/contexts/ThemeContext';
+import { fonts } from '../src/constants/fonts';
 import type { Category } from '../src/types';
 
 export default function AddTransaction() {
@@ -68,74 +69,68 @@ export default function AddTransaction() {
   };
 
   if (initLoading) {
-    return <SafeAreaView style={[s.container, { backgroundColor: colors.bg }]}><View style={s.center}><ActivityIndicator size="large" color={colors.brand} /></View></SafeAreaView>;
+    return <SafeAreaView style={[st.container, { backgroundColor: colors.bg }]}><View style={st.center}><ActivityIndicator size="large" color={colors.brand} /></View></SafeAreaView>;
   }
 
   return (
-    <SafeAreaView style={[s.container, { backgroundColor: colors.bg }]} testID="add-transaction-screen">
+    <SafeAreaView style={[st.container, { backgroundColor: colors.bg }]} testID="add-transaction-screen">
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        {/* Header */}
-        <View style={[s.header, { borderBottomColor: colors.border }]}>
+        <View style={[st.header, { borderBottomColor: colors.border }]}>
           <TouchableOpacity testID="close-add-tx" onPress={() => router.back()}>
             <Ionicons name="close" size={26} color={colors.text} />
           </TouchableOpacity>
-          <Text style={[s.headerTitle, { color: colors.text }]}>{isEdit ? 'Edit Transaksi' : 'Tambah Transaksi'}</Text>
+          <Text style={[st.headerTitle, { color: colors.text, fontFamily: fonts.semiBold }]}>{isEdit ? 'Edit Transaksi' : 'Tambah Transaksi'}</Text>
           <View style={{ width: 26 }} />
         </View>
 
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
-          {/* Tipe Toggle */}
-          <View style={s.typeRow}>
-            <TouchableOpacity testID="type-expense" style={[s.typeBtn, { backgroundColor: colors.bgCard, borderColor: colors.border }, type === 'expense' && { backgroundColor: colors.expense, borderColor: colors.expense }]}
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={st.scroll}>
+          <View style={st.typeRow}>
+            <TouchableOpacity testID="type-expense" style={[st.typeBtn, { backgroundColor: colors.bgCard, borderColor: colors.border }, type === 'expense' && { backgroundColor: colors.expense, borderColor: colors.expense }]}
               onPress={() => setType('expense')}>
               <Ionicons name="arrow-down-circle" size={18} color={type === 'expense' ? '#FFF' : colors.expense} />
-              <Text style={[s.typeText, { color: colors.textSecondary }, type === 'expense' && s.typeTextActive]}>Pengeluaran</Text>
+              <Text style={[st.typeText, { color: colors.textSecondary, fontFamily: fonts.medium }, type === 'expense' && st.typeTextActive]}>Pengeluaran</Text>
             </TouchableOpacity>
-            <TouchableOpacity testID="type-income" style={[s.typeBtn, { backgroundColor: colors.bgCard, borderColor: colors.border }, type === 'income' && { backgroundColor: colors.income, borderColor: colors.income }]}
+            <TouchableOpacity testID="type-income" style={[st.typeBtn, { backgroundColor: colors.bgCard, borderColor: colors.border }, type === 'income' && { backgroundColor: colors.income, borderColor: colors.income }]}
               onPress={() => setType('income')}>
               <Ionicons name="arrow-up-circle" size={18} color={type === 'income' ? '#FFF' : colors.income} />
-              <Text style={[s.typeText, { color: colors.textSecondary }, type === 'income' && s.typeTextActive]}>Pemasukan</Text>
+              <Text style={[st.typeText, { color: colors.textSecondary, fontFamily: fonts.medium }, type === 'income' && st.typeTextActive]}>Pemasukan</Text>
             </TouchableOpacity>
           </View>
 
-          {/* Jumlah */}
-          <View style={[s.amountCard, { backgroundColor: colors.bgCard, borderColor: colors.border }]}>
-            <Text style={[s.label, { color: colors.textTertiary }]}>Jumlah</Text>
-            <View style={s.amountRow}>
-              <Text style={[s.rupiah, { color: colors.text }]}>Rp</Text>
-              <TextInput testID="amount-input" style={[s.amountInput, { color: colors.text }]} keyboardType="numeric" placeholder="0"
+          <View style={[st.amountCard, { backgroundColor: colors.bgCard, borderColor: colors.border }]}>
+            <Text style={[st.label, { color: colors.textTertiary, fontFamily: fonts.semiBold }]}>Jumlah</Text>
+            <View style={st.amountRow}>
+              <Text style={[st.rupiah, { color: colors.text, fontFamily: fonts.semiBold }]}>Rp</Text>
+              <TextInput testID="amount-input" style={[st.amountInput, { color: colors.text, fontFamily: fonts.bold }]} keyboardType="numeric" placeholder="0"
                 value={formatAmountInput(amount)} onChangeText={t => setAmount(t.replace(/\D/g, ''))}
                 placeholderTextColor={colors.textTertiary} />
             </View>
           </View>
 
-          {/* Kategori */}
-          <Text style={[s.label, { color: colors.textTertiary }]}>Kategori</Text>
-          <View style={s.catGrid}>
+          <Text style={[st.label, { color: colors.textTertiary, fontFamily: fonts.semiBold }]}>Kategori</Text>
+          <View style={st.catGrid}>
             {filteredCats.map(cat => (
               <TouchableOpacity key={cat.id} testID={`cat-${cat.id}`}
-                style={[s.catItem, { backgroundColor: colors.bgCard, borderColor: colors.border }, categoryId === cat.id && { backgroundColor: cat.color + '20', borderColor: cat.color }]}
+                style={[st.catItem, { backgroundColor: colors.bgCard, borderColor: colors.border }, categoryId === cat.id && { backgroundColor: cat.color + '20', borderColor: cat.color }]}
                 onPress={() => setCategoryId(cat.id)}>
-                <View style={[s.catIconBg, { backgroundColor: cat.color + '18' }]}>
+                <View style={[st.catIconBg, { backgroundColor: cat.color + '18' }]}>
                   <Ionicons name={cat.icon as any} size={20} color={cat.color} />
                 </View>
-                <Text style={[s.catName, { color: colors.textSecondary }, categoryId === cat.id && { color: cat.color, fontWeight: '600' }]} numberOfLines={1}>{cat.name}</Text>
+                <Text style={[st.catName, { color: colors.textSecondary, fontFamily: fonts.regular }, categoryId === cat.id && { color: cat.color, fontFamily: fonts.semiBold }]} numberOfLines={1}>{cat.name}</Text>
               </TouchableOpacity>
             ))}
           </View>
 
-          {/* Deskripsi */}
-          <Text style={[s.label, { color: colors.textTertiary }]}>Catatan (Opsional)</Text>
-          <TextInput testID="description-input" style={[s.descInput, { backgroundColor: colors.bgCard, color: colors.text, borderColor: colors.border }]} placeholder="Contoh: Makan siang di kantin"
+          <Text style={[st.label, { color: colors.textTertiary, fontFamily: fonts.semiBold }]}>Catatan (Opsional)</Text>
+          <TextInput testID="description-input" style={[st.descInput, { backgroundColor: colors.bgCard, color: colors.text, borderColor: colors.border, fontFamily: fonts.regular }]} placeholder="Contoh: Makan siang di kantin"
             value={description} onChangeText={setDescription} multiline placeholderTextColor={colors.textTertiary} />
 
-          {/* Tombol Simpan */}
-          <TouchableOpacity testID="save-transaction-btn" style={[s.saveBtn, { backgroundColor: colors.brand }, loading && s.saveBtnDisabled]}
+          <TouchableOpacity testID="save-transaction-btn" style={[st.saveBtn, { backgroundColor: colors.brand }, loading && st.saveBtnDisabled]}
             onPress={handleSave} disabled={loading} activeOpacity={0.8}>
             {loading ? <ActivityIndicator color="#FFF" /> : (
               <>
                 <Ionicons name="checkmark-circle" size={20} color="#FFF" />
-                <Text style={s.saveBtnText}>{isEdit ? 'Simpan Perubahan' : 'Simpan Transaksi'}</Text>
+                <Text style={[st.saveBtnText, { fontFamily: fonts.semiBold }]}>{isEdit ? 'Simpan Perubahan' : 'Simpan Transaksi'}</Text>
               </>
             )}
           </TouchableOpacity>
@@ -145,21 +140,21 @@ export default function AddTransaction() {
   );
 }
 
-const s = StyleSheet.create({
+const st = StyleSheet.create({
   container: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 12, borderBottomWidth: 1 },
-  headerTitle: { fontSize: 17, fontWeight: '600' },
+  headerTitle: { fontSize: 17 },
   scroll: { padding: 20, paddingBottom: 40 },
   typeRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
   typeBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 12, borderWidth: 1 },
-  typeText: { fontSize: 14, fontWeight: '500' },
+  typeText: { fontSize: 14 },
   typeTextActive: { color: '#FFF' },
   amountCard: { borderRadius: 16, padding: 20, marginBottom: 20, borderWidth: 1 },
-  label: { fontSize: 13, fontWeight: '600', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
+  label: { fontSize: 13, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
   amountRow: { flexDirection: 'row', alignItems: 'center' },
-  rupiah: { fontSize: 22, fontWeight: '600', marginRight: 8 },
-  amountInput: { flex: 1, fontSize: 32, fontWeight: '700', padding: 0 },
+  rupiah: { fontSize: 22, marginRight: 8 },
+  amountInput: { flex: 1, fontSize: 32, padding: 0 },
   catGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 20 },
   catItem: { width: '30%' as any, alignItems: 'center', paddingVertical: 12, borderRadius: 12, borderWidth: 1 },
   catIconBg: { width: 36, height: 36, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginBottom: 6 },
@@ -167,5 +162,5 @@ const s = StyleSheet.create({
   descInput: { borderRadius: 12, padding: 14, fontSize: 14, minHeight: 60, textAlignVertical: 'top', borderWidth: 1, marginBottom: 24 },
   saveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: 14, paddingVertical: 16, gap: 8 },
   saveBtnDisabled: { opacity: 0.6 },
-  saveBtnText: { fontSize: 16, fontWeight: '600', color: '#FFF' },
+  saveBtnText: { fontSize: 16, color: '#FFF' },
 });

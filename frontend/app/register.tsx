@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../src/contexts/AuthContext';
+import { fonts } from '../src/constants/fonts';
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -30,33 +31,33 @@ export default function RegisterScreen() {
         <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
           <View style={s.headerSection}>
             <View style={s.logo}><Ionicons name="wallet" size={36} color="#FFF" /></View>
-            <Text style={s.appName}>BudgetWise</Text>
-            <Text style={s.subtitle}>Buat akun untuk mulai mencatat</Text>
+            <Text style={[s.appName, { fontFamily: fonts.bold }]}>BudgetWise</Text>
+            <Text style={[s.subtitle, { fontFamily: fonts.regular }]}>Buat akun untuk mulai mencatat</Text>
           </View>
 
           <View style={s.card}>
-            <Text style={s.cardTitle}>Daftar</Text>
+            <Text style={[s.cardTitle, { fontFamily: fonts.bold }]}>Daftar</Text>
 
-            {error ? <View style={s.errorBox}><Ionicons name="alert-circle" size={16} color="#D34A3E" /><Text style={s.errorText}>{error}</Text></View> : null}
+            {error ? <View style={s.errorBox}><Ionicons name="alert-circle" size={16} color="#D34A3E" /><Text style={[s.errorText, { fontFamily: fonts.medium }]}>{error}</Text></View> : null}
 
-            <Text style={s.label}>Nama Lengkap</Text>
+            <Text style={[s.label, { fontFamily: fonts.semiBold }]}>Nama Lengkap</Text>
             <View style={s.inputRow}>
               <Ionicons name="person-outline" size={18} color="#7D7D7D" />
-              <TextInput testID="register-name-input" style={s.input} placeholder="Nama Anda"
+              <TextInput testID="register-name-input" style={[s.input, { fontFamily: fonts.regular }]} placeholder="Nama Anda"
                 value={name} onChangeText={setName} placeholderTextColor="#B0B0B0" />
             </View>
 
-            <Text style={s.label}>Email</Text>
+            <Text style={[s.label, { fontFamily: fonts.semiBold }]}>Email</Text>
             <View style={s.inputRow}>
               <Ionicons name="mail-outline" size={18} color="#7D7D7D" />
-              <TextInput testID="register-email-input" style={s.input} placeholder="email@example.com"
+              <TextInput testID="register-email-input" style={[s.input, { fontFamily: fonts.regular }]} placeholder="email@example.com"
                 value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" placeholderTextColor="#B0B0B0" />
             </View>
 
-            <Text style={s.label}>Password</Text>
+            <Text style={[s.label, { fontFamily: fonts.semiBold }]}>Password</Text>
             <View style={s.inputRow}>
               <Ionicons name="lock-closed-outline" size={18} color="#7D7D7D" />
-              <TextInput testID="register-password-input" style={s.input} placeholder="Minimal 6 karakter"
+              <TextInput testID="register-password-input" style={[s.input, { fontFamily: fonts.regular }]} placeholder="Minimal 6 karakter"
                 value={password} onChangeText={setPassword} secureTextEntry={!showPw} placeholderTextColor="#B0B0B0" />
               <TouchableOpacity onPress={() => setShowPw(!showPw)}>
                 <Ionicons name={showPw ? "eye-off-outline" : "eye-outline"} size={18} color="#7D7D7D" />
@@ -64,13 +65,13 @@ export default function RegisterScreen() {
             </View>
 
             <TouchableOpacity testID="register-submit-button" style={[s.btn, loading && s.btnDisabled]} onPress={handleRegister} disabled={loading} activeOpacity={0.8}>
-              {loading ? <ActivityIndicator color="#FFF" /> : <Text style={s.btnText}>Daftar Sekarang</Text>}
+              {loading ? <ActivityIndicator color="#FFF" /> : <Text style={[s.btnText, { fontFamily: fonts.semiBold }]}>Daftar Sekarang</Text>}
             </TouchableOpacity>
 
             <View style={s.footerRow}>
-              <Text style={s.footerText}>Sudah punya akun?</Text>
+              <Text style={[s.footerText, { fontFamily: fonts.regular }]}>Sudah punya akun?</Text>
               <TouchableOpacity testID="go-to-login" onPress={() => router.back()}>
-                <Text style={s.footerLink}> Masuk</Text>
+                <Text style={[s.footerLink, { fontFamily: fonts.semiBold }]}> Masuk</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -85,19 +86,19 @@ const s = StyleSheet.create({
   scroll: { flexGrow: 1, justifyContent: 'center', padding: 24 },
   headerSection: { alignItems: 'center', marginBottom: 32 },
   logo: { width: 68, height: 68, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
-  appName: { fontSize: 32, fontWeight: '700', color: '#FFFFFF' },
+  appName: { fontSize: 32, color: '#FFFFFF' },
   subtitle: { fontSize: 14, color: 'rgba(255,255,255,0.7)', marginTop: 4 },
   card: { backgroundColor: '#FFFFFF', borderRadius: 20, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 24, elevation: 8 },
-  cardTitle: { fontSize: 22, fontWeight: '700', color: '#1A4D2E', marginBottom: 20 },
+  cardTitle: { fontSize: 22, color: '#1A4D2E', marginBottom: 20 },
   errorBox: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FEE2E2', borderRadius: 10, padding: 12, marginBottom: 16 },
   errorText: { fontSize: 13, color: '#D34A3E', flex: 1 },
-  label: { fontSize: 13, fontWeight: '600', color: '#7D7D7D', marginBottom: 6, marginTop: 12 },
+  label: { fontSize: 13, color: '#7D7D7D', marginBottom: 6, marginTop: 12 },
   inputRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F9F9F6', borderRadius: 12, paddingHorizontal: 14, borderWidth: 1, borderColor: '#F0EBE1', gap: 10 },
   input: { flex: 1, fontSize: 15, color: '#1A4D2E', paddingVertical: 14 },
   btn: { backgroundColor: '#E86A33', borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginTop: 24 },
   btnDisabled: { opacity: 0.6 },
-  btnText: { fontSize: 16, fontWeight: '600', color: '#FFF' },
+  btnText: { fontSize: 16, color: '#FFF' },
   footerRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 20 },
   footerText: { fontSize: 14, color: '#7D7D7D' },
-  footerLink: { fontSize: 14, fontWeight: '600', color: '#1A4D2E' },
+  footerLink: { fontSize: 14, color: '#1A4D2E' },
 });

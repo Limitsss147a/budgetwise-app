@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, TextInput, Switch, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -6,6 +6,7 @@ import { useFocusEffect } from 'expo-router';
 import { api } from '../../src/utils/api';
 import { useTheme } from '../../src/contexts/ThemeContext';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { fonts } from '../../src/constants/fonts';
 import type { Settings } from '../../src/types';
 
 export default function SettingsScreen() {
@@ -82,41 +83,41 @@ export default function SettingsScreen() {
   };
 
   if (loading) {
-    return <SafeAreaView style={[s.container, { backgroundColor: colors.bg }]}><View style={s.center}><ActivityIndicator size="large" color={colors.brand} /></View></SafeAreaView>;
+    return <SafeAreaView style={[st.container, { backgroundColor: colors.bg }]}><View style={st.center}><ActivityIndicator size="large" color={colors.brand} /></View></SafeAreaView>;
   }
 
   return (
-    <SafeAreaView style={[s.container, { backgroundColor: colors.bg }]} testID="settings-screen">
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
-        <Text style={[s.screenTitle, { color: colors.text }]}>Pengaturan</Text>
+    <SafeAreaView style={[st.container, { backgroundColor: colors.bg }]} testID="settings-screen">
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={st.scroll}>
+        <Text style={[st.screenTitle, { color: colors.text, fontFamily: fonts.bold }]}>Pengaturan</Text>
 
         {/* Profil */}
-        <View style={s.section}>
-          <Text style={[s.sectionTitle, { color: colors.textTertiary }]}>Profil</Text>
-          <View style={[s.card, { backgroundColor: colors.bgCard, borderColor: colors.border }]}>
-            <View style={s.profileRow}>
-              <View style={[s.avatar, { backgroundColor: colors.brand }]}>
+        <View style={st.section}>
+          <Text style={[st.sectionTitle, { color: colors.textTertiary, fontFamily: fonts.semiBold }]}>Profil</Text>
+          <View style={[st.card, { backgroundColor: colors.bgCard, borderColor: colors.border }]}>
+            <View style={st.profileRow}>
+              <View style={[st.avatar, { backgroundColor: colors.brand }]}>
                 <Ionicons name="person" size={28} color={colors.textInverse} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[s.emailText, { color: colors.textTertiary }]}>{user?.email || ''}</Text>
-                <TextInput testID="profile-name-input" style={[s.nameInput, { color: colors.text, backgroundColor: colors.bgSecondary }]} placeholder="Nama Anda"
+                <Text style={[st.emailText, { color: colors.textTertiary, fontFamily: fonts.regular }]}>{user?.email || ''}</Text>
+                <TextInput testID="profile-name-input" style={[st.nameInput, { color: colors.text, backgroundColor: colors.bgSecondary, fontFamily: fonts.medium }]} placeholder="Nama Anda"
                   value={profileName} onChangeText={setProfileName} placeholderTextColor={colors.textTertiary} />
               </View>
-              <TouchableOpacity testID="save-profile-btn" style={[s.saveNameBtn, { backgroundColor: colors.accent }]} onPress={handleSaveName}>
-                <Text style={s.saveNameText}>Simpan</Text>
+              <TouchableOpacity testID="save-profile-btn" style={[st.saveNameBtn, { backgroundColor: colors.accent }]} onPress={handleSaveName}>
+                <Text style={[st.saveNameText, { fontFamily: fonts.semiBold }]}>Simpan</Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
 
         {/* Tampilan */}
-        <View style={s.section}>
-          <Text style={[s.sectionTitle, { color: colors.textTertiary }]}>Tampilan</Text>
-          <View style={[s.card, { backgroundColor: colors.bgCard, borderColor: colors.border }]}>
-            <View style={s.settingRow}>
+        <View style={st.section}>
+          <Text style={[st.sectionTitle, { color: colors.textTertiary, fontFamily: fonts.semiBold }]}>Tampilan</Text>
+          <View style={[st.card, { backgroundColor: colors.bgCard, borderColor: colors.border }]}>
+            <View style={st.settingRow}>
               <Ionicons name={theme === 'dark' ? 'moon' : 'sunny'} size={20} color={colors.brand} />
-              <Text style={[s.settingLabel, { color: colors.text }]}>Mode Gelap</Text>
+              <Text style={[st.settingLabel, { color: colors.text, fontFamily: fonts.medium }]}>Mode Gelap</Text>
               <Switch
                 testID="dark-mode-toggle"
                 value={theme === 'dark'}
@@ -129,34 +130,34 @@ export default function SettingsScreen() {
         </View>
 
         {/* Keamanan */}
-        <View style={s.section}>
-          <Text style={[s.sectionTitle, { color: colors.textTertiary }]}>Keamanan</Text>
-          <View style={[s.card, { backgroundColor: colors.bgCard, borderColor: colors.border }]}>
-            <View style={s.settingRow}>
+        <View style={st.section}>
+          <Text style={[st.sectionTitle, { color: colors.textTertiary, fontFamily: fonts.semiBold }]}>Keamanan</Text>
+          <View style={[st.card, { backgroundColor: colors.bgCard, borderColor: colors.border }]}>
+            <View style={st.settingRow}>
               <Ionicons name="lock-closed-outline" size={20} color={colors.brand} />
-              <Text style={[s.settingLabel, { color: colors.text }]}>PIN Keamanan</Text>
-              <Text style={[s.settingVal, { color: settings?.has_pin ? colors.income : colors.textTertiary }]}>
+              <Text style={[st.settingLabel, { color: colors.text, fontFamily: fonts.medium }]}>PIN Keamanan</Text>
+              <Text style={[st.settingVal, { color: settings?.has_pin ? colors.income : colors.textTertiary, fontFamily: fonts.medium }]}>
                 {settings?.has_pin ? 'Aktif' : 'Nonaktif'}
               </Text>
             </View>
-            <View style={s.pinActions}>
+            <View style={st.pinActions}>
               {settings?.has_pin ? (
-                <TouchableOpacity testID="remove-pin-btn" style={[s.dangerBtn, { backgroundColor: colors.expense }]} onPress={handleRemovePin}>
-                  <Text style={s.dangerBtnText}>Hapus PIN</Text>
+                <TouchableOpacity testID="remove-pin-btn" style={[st.dangerBtn, { backgroundColor: colors.expense }]} onPress={handleRemovePin}>
+                  <Text style={[st.dangerBtnText, { fontFamily: fonts.semiBold }]}>Hapus PIN</Text>
                 </TouchableOpacity>
               ) : !showPinSetup ? (
-                <TouchableOpacity testID="set-pin-btn" style={[s.primaryBtn, { backgroundColor: colors.brand }]} onPress={() => setShowPinSetup(true)}>
-                  <Text style={s.primaryBtnText}>Atur PIN</Text>
+                <TouchableOpacity testID="set-pin-btn" style={[st.primaryBtn, { backgroundColor: colors.brand }]} onPress={() => setShowPinSetup(true)}>
+                  <Text style={[st.primaryBtnText, { fontFamily: fonts.semiBold }]}>Atur PIN</Text>
                 </TouchableOpacity>
               ) : (
-                <View style={s.pinSetupRow}>
-                  <TextInput testID="new-pin-input" style={[s.pinInput, { color: colors.text, backgroundColor: colors.bgSecondary, borderColor: colors.border }]} keyboardType="numeric" maxLength={6}
+                <View style={st.pinSetupRow}>
+                  <TextInput testID="new-pin-input" style={[st.pinInput, { color: colors.text, backgroundColor: colors.bgSecondary, borderColor: colors.border, fontFamily: fonts.semiBold }]} keyboardType="numeric" maxLength={6}
                     secureTextEntry placeholder="6 digit PIN" value={newPin} onChangeText={setNewPin} placeholderTextColor={colors.textTertiary} />
-                  <TouchableOpacity testID="confirm-pin-btn" style={[s.primaryBtn, { backgroundColor: colors.brand }]} onPress={handleSetPin}>
-                    <Text style={s.primaryBtnText}>Simpan</Text>
+                  <TouchableOpacity testID="confirm-pin-btn" style={[st.primaryBtn, { backgroundColor: colors.brand }]} onPress={handleSetPin}>
+                    <Text style={[st.primaryBtnText, { fontFamily: fonts.semiBold }]}>Simpan</Text>
                   </TouchableOpacity>
                   <TouchableOpacity onPress={() => { setShowPinSetup(false); setNewPin(''); }}>
-                    <Text style={[s.cancelText, { color: colors.textTertiary }]}>Batal</Text>
+                    <Text style={[st.cancelText, { color: colors.textTertiary, fontFamily: fonts.medium }]}>Batal</Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -165,45 +166,45 @@ export default function SettingsScreen() {
         </View>
 
         {/* Info */}
-        <View style={s.section}>
-          <Text style={[s.sectionTitle, { color: colors.textTertiary }]}>Informasi</Text>
-          <View style={[s.card, { backgroundColor: colors.bgCard, borderColor: colors.border }]}>
-            <View style={s.settingRow}>
+        <View style={st.section}>
+          <Text style={[st.sectionTitle, { color: colors.textTertiary, fontFamily: fonts.semiBold }]}>Informasi</Text>
+          <View style={[st.card, { backgroundColor: colors.bgCard, borderColor: colors.border }]}>
+            <View style={st.settingRow}>
               <Ionicons name="cash-outline" size={20} color={colors.brand} />
-              <Text style={[s.settingLabel, { color: colors.text }]}>Mata Uang</Text>
-              <Text style={[s.settingVal, { color: colors.textTertiary }]}>IDR (Rupiah)</Text>
+              <Text style={[st.settingLabel, { color: colors.text, fontFamily: fonts.medium }]}>Mata Uang</Text>
+              <Text style={[st.settingVal, { color: colors.textTertiary, fontFamily: fonts.regular }]}>IDR (Rupiah)</Text>
             </View>
-            <View style={[s.divider, { backgroundColor: colors.border }]} />
-            <View style={s.settingRow}>
+            <View style={[st.divider, { backgroundColor: colors.border }]} />
+            <View style={st.settingRow}>
               <Ionicons name="information-circle-outline" size={20} color={colors.brand} />
-              <Text style={[s.settingLabel, { color: colors.text }]}>Versi Aplikasi</Text>
-              <Text style={[s.settingVal, { color: colors.textTertiary }]}>1.0.0</Text>
+              <Text style={[st.settingLabel, { color: colors.text, fontFamily: fonts.medium }]}>Versi Aplikasi</Text>
+              <Text style={[st.settingVal, { color: colors.textTertiary, fontFamily: fonts.regular }]}>1.0.0</Text>
             </View>
           </View>
         </View>
 
         {/* Data */}
-        <View style={s.section}>
-          <Text style={[s.sectionTitle, { color: colors.textTertiary }]}>Data</Text>
-          <View style={[s.card, { backgroundColor: colors.bgCard, borderColor: colors.border }]}>
-            <TouchableOpacity testID="backup-btn" style={s.settingRow} onPress={handleBackup}>
+        <View style={st.section}>
+          <Text style={[st.sectionTitle, { color: colors.textTertiary, fontFamily: fonts.semiBold }]}>Data</Text>
+          <View style={[st.card, { backgroundColor: colors.bgCard, borderColor: colors.border }]}>
+            <TouchableOpacity testID="backup-btn" style={st.settingRow} onPress={handleBackup}>
               <Ionicons name="cloud-download-outline" size={20} color={colors.brand} />
-              <Text style={[s.settingLabel, { color: colors.text }]}>Backup Data</Text>
+              <Text style={[st.settingLabel, { color: colors.text, fontFamily: fonts.medium }]}>Backup Data</Text>
               <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
             </TouchableOpacity>
-            <View style={[s.divider, { backgroundColor: colors.border }]} />
-            <TouchableOpacity testID="reset-btn" style={s.settingRow} onPress={handleReset}>
+            <View style={[st.divider, { backgroundColor: colors.border }]} />
+            <TouchableOpacity testID="reset-btn" style={st.settingRow} onPress={handleReset}>
               <Ionicons name="trash-outline" size={20} color={colors.expense} />
-              <Text style={[s.settingLabel, { color: colors.expense }]}>Reset Semua Data</Text>
+              <Text style={[st.settingLabel, { color: colors.expense, fontFamily: fonts.medium }]}>Reset Semua Data</Text>
               <Ionicons name="chevron-forward" size={18} color={colors.expense} />
             </TouchableOpacity>
           </View>
         </View>
 
         {/* Logout */}
-        <TouchableOpacity testID="logout-btn" style={[s.logoutBtn, { backgroundColor: colors.bgCard, borderColor: colors.expense }]} onPress={handleLogout} activeOpacity={0.7}>
+        <TouchableOpacity testID="logout-btn" style={[st.logoutBtn, { backgroundColor: colors.bgCard, borderColor: colors.expense }]} onPress={handleLogout} activeOpacity={0.7}>
           <Ionicons name="log-out-outline" size={20} color={colors.expense} />
-          <Text style={[s.logoutText, { color: colors.expense }]}>Keluar dari Akun</Text>
+          <Text style={[st.logoutText, { color: colors.expense, fontFamily: fonts.semiBold }]}>Keluar dari Akun</Text>
         </TouchableOpacity>
 
         <View style={{ height: 40 }} />
@@ -212,32 +213,32 @@ export default function SettingsScreen() {
   );
 }
 
-const s = StyleSheet.create({
+const st = StyleSheet.create({
   container: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   scroll: { padding: 20, paddingBottom: 40 },
-  screenTitle: { fontSize: 24, fontWeight: '700', marginBottom: 16 },
+  screenTitle: { fontSize: 24, marginBottom: 16 },
   section: { marginBottom: 20 },
-  sectionTitle: { fontSize: 13, fontWeight: '600', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 },
+  sectionTitle: { fontSize: 13, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 },
   card: { borderRadius: 14, padding: 16, borderWidth: 1 },
   profileRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   avatar: { width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center' },
   emailText: { fontSize: 12, marginBottom: 4 },
-  nameInput: { fontSize: 15, fontWeight: '500', padding: 8, borderRadius: 8 },
+  nameInput: { fontSize: 15, padding: 8, borderRadius: 8 },
   saveNameBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 },
-  saveNameText: { fontSize: 13, fontWeight: '600', color: '#FFF' },
+  saveNameText: { fontSize: 13, color: '#FFF' },
   settingRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 4 },
-  settingLabel: { flex: 1, fontSize: 14, fontWeight: '500' },
-  settingVal: { fontSize: 13, fontWeight: '500' },
+  settingLabel: { flex: 1, fontSize: 14 },
+  settingVal: { fontSize: 13 },
   divider: { height: 1, marginVertical: 12 },
   pinActions: { marginTop: 12 },
   pinSetupRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-  pinInput: { flex: 1, fontSize: 16, fontWeight: '600', padding: 10, borderRadius: 8, borderWidth: 1, letterSpacing: 8, textAlign: 'center', minWidth: 150 },
+  pinInput: { flex: 1, fontSize: 16, padding: 10, borderRadius: 8, borderWidth: 1, letterSpacing: 8, textAlign: 'center', minWidth: 150 },
   primaryBtn: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8 },
-  primaryBtnText: { fontSize: 13, fontWeight: '600', color: '#FFF' },
+  primaryBtnText: { fontSize: 13, color: '#FFF' },
   dangerBtn: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8, alignSelf: 'flex-start' },
-  dangerBtnText: { fontSize: 13, fontWeight: '600', color: '#FFF' },
-  cancelText: { fontSize: 13, fontWeight: '500', paddingVertical: 10 },
+  dangerBtnText: { fontSize: 13, color: '#FFF' },
+  cancelText: { fontSize: 13, paddingVertical: 10 },
   logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 16, borderRadius: 14, borderWidth: 1.5, marginTop: 4 },
-  logoutText: { fontSize: 16, fontWeight: '600' },
+  logoutText: { fontSize: 16 },
 });

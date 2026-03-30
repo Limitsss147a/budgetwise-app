@@ -6,9 +6,11 @@ import { useFocusEffect } from 'expo-router';
 import { PieChart, LineChart } from 'react-native-gifted-charts';
 import { api } from '../../src/utils/api';
 import { formatRupiah, getCurrentMonth, formatMonthYear, getMonthOffset } from '../../src/utils/format';
+import { useTheme } from '../../src/contexts/ThemeContext';
 import type { CategoryBreakdown, MonthlyTrend } from '../../src/types';
 
 export default function Reports() {
+  const { colors } = useTheme();
   const [month, setMonth] = useState(getCurrentMonth());
   const [period, setPeriod] = useState(6);
   const [breakdown, setBreakdown] = useState<CategoryBreakdown[]>([]);
@@ -43,53 +45,54 @@ export default function Reports() {
   };
 
   if (loading) {
-    return <SafeAreaView style={s.container}><View style={s.center}><ActivityIndicator size="large" color="#1A4D2E" /></View></SafeAreaView>;
+    return <SafeAreaView style={[s.container, { backgroundColor: colors.bg }]}><View style={s.center}><ActivityIndicator size="large" color={colors.brand} /></View></SafeAreaView>;
   }
 
   return (
-    <SafeAreaView style={s.container} testID="reports-screen">
-      <ScrollView showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} tintColor="#1A4D2E" />} contentContainerStyle={s.scroll}>
-        <Text style={s.screenTitle}>Laporan</Text>
+    <SafeAreaView style={[s.container, { backgroundColor: colors.bg }]} testID="reports-screen">
+      <ScrollView showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} tintColor={colors.brand} />} contentContainerStyle={s.scroll}>
+        <Text style={[s.screenTitle, { color: colors.text }]}>Laporan</Text>
 
         {/* Bulan Navigator */}
         <View style={s.monthNav}>
           <TouchableOpacity testID="report-prev-month" onPress={() => setMonth(m => getMonthOffset(m, -1))}>
-            <Ionicons name="chevron-back" size={22} color="#1A4D2E" />
+            <Ionicons name="chevron-back" size={22} color={colors.text} />
           </TouchableOpacity>
-          <Text style={s.monthText}>{formatMonthYear(month)}</Text>
+          <Text style={[s.monthText, { color: colors.text }]}>{formatMonthYear(month)}</Text>
           <TouchableOpacity testID="report-next-month" onPress={() => setMonth(m => getMonthOffset(m, 1))}>
-            <Ionicons name="chevron-forward" size={22} color="#1A4D2E" />
+            <Ionicons name="chevron-forward" size={22} color={colors.text} />
           </TouchableOpacity>
         </View>
 
         {/* Ringkasan */}
         <View style={s.summaryRow}>
-          <View style={[s.summaryCard, { borderLeftColor: '#3A6E4B' }]}>
-            <Text style={s.sumLabel}>Pemasukan</Text>
-            <Text style={[s.sumVal, { color: '#3A6E4B' }]}>{formatRupiah(summary?.month_income || 0)}</Text>
+          <View style={[s.summaryCard, { backgroundColor: colors.bgCard, borderColor: colors.border, borderLeftColor: colors.income }]}>
+            <Text style={[s.sumLabel, { color: colors.textTertiary }]}>Pemasukan</Text>
+            <Text style={[s.sumVal, { color: colors.income }]}>{formatRupiah(summary?.month_income || 0)}</Text>
           </View>
-          <View style={[s.summaryCard, { borderLeftColor: '#D34A3E' }]}>
-            <Text style={s.sumLabel}>Pengeluaran</Text>
-            <Text style={[s.sumVal, { color: '#D34A3E' }]}>{formatRupiah(summary?.month_expense || 0)}</Text>
+          <View style={[s.summaryCard, { backgroundColor: colors.bgCard, borderColor: colors.border, borderLeftColor: colors.expense }]}>
+            <Text style={[s.sumLabel, { color: colors.textTertiary }]}>Pengeluaran</Text>
+            <Text style={[s.sumVal, { color: colors.expense }]}>{formatRupiah(summary?.month_expense || 0)}</Text>
           </View>
         </View>
 
         {/* Selisih */}
-        <View style={s.netCard}>
-          <Text style={s.netLabel}>Selisih Bulan Ini</Text>
-          <Text style={[s.netVal, { color: (summary?.month_net || 0) >= 0 ? '#3A6E4B' : '#D34A3E' }]}>
+        <View style={[s.netCard, { backgroundColor: colors.bgCard, borderColor: colors.border }]}>
+          <Text style={[s.netLabel, { color: colors.textTertiary }]}>Selisih Bulan Ini</Text>
+          <Text style={[s.netVal, { color: (summary?.month_net || 0) >= 0 ? colors.income : colors.expense }]}>
             {(summary?.month_net || 0) >= 0 ? '+' : ''}{formatRupiah(summary?.month_net || 0)}
           </Text>
         </View>
 
         {/* Tren Bulanan */}
-        <View style={s.card}>
-          <Text style={s.cardTitle}>Tren Keuangan</Text>
+        <View style={[s.card, { backgroundColor: colors.bgCard, borderColor: colors.border }]}>
+          <Text style={[s.cardTitle, { color: colors.text }]}>Tren Keuangan</Text>
           <View style={s.periodRow}>
             {periods.map(p => (
-              <TouchableOpacity key={p.v} testID={`period-${p.v}`} style={[s.periodPill, period === p.v && s.periodActive]}
+              <TouchableOpacity key={p.v} testID={`period-${p.v}`}
+                style={[s.periodPill, { backgroundColor: colors.bgSecondary }, period === p.v && { backgroundColor: colors.brand }]}
                 onPress={() => setPeriod(p.v)}>
-                <Text style={[s.periodText, period === p.v && s.periodTextActive]}>{p.l}</Text>
+                <Text style={[s.periodText, { color: colors.textTertiary }, period === p.v && { color: colors.textInverse }]}>{p.l}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -97,17 +100,17 @@ export default function Reports() {
             <View style={s.chartCenter}>
               <LineChart
                 data={incomeData} data2={expenseData}
-                color1="#3A6E4B" color2="#D34A3E"
+                color1={colors.income} color2={colors.expense}
                 curved thickness={2}
-                hideDataPoints={false} dataPointsColor1="#3A6E4B" dataPointsColor2="#D34A3E"
+                hideDataPoints={false} dataPointsColor1={colors.income} dataPointsColor2={colors.expense}
                 dataPointsRadius={3}
-                yAxisThickness={0} xAxisThickness={1} xAxisColor="#F0EBE1"
+                yAxisThickness={0} xAxisThickness={1} xAxisColor={colors.border}
                 hideRules spacing={50} noOfSections={4} hideYAxisText
                 width={260}
               />
               <View style={s.lineLegend}>
-                <View style={s.lineLegendItem}><View style={[s.lineLegendDot, { backgroundColor: '#3A6E4B' }]} /><Text style={s.lineLegendText}>Pemasukan</Text></View>
-                <View style={s.lineLegendItem}><View style={[s.lineLegendDot, { backgroundColor: '#D34A3E' }]} /><Text style={s.lineLegendText}>Pengeluaran</Text></View>
+                <View style={s.lineLegendItem}><View style={[s.lineLegendDot, { backgroundColor: colors.income }]} /><Text style={[s.lineLegendText, { color: colors.textSecondary }]}>Pemasukan</Text></View>
+                <View style={s.lineLegendItem}><View style={[s.lineLegendDot, { backgroundColor: colors.expense }]} /><Text style={[s.lineLegendText, { color: colors.textSecondary }]}>Pengeluaran</Text></View>
               </View>
             </View>
           )}
@@ -115,18 +118,18 @@ export default function Reports() {
 
         {/* Breakdown Pie */}
         {pieData.length > 0 && (
-          <View style={s.card}>
-            <Text style={s.cardTitle}>Distribusi Pengeluaran</Text>
+          <View style={[s.card, { backgroundColor: colors.bgCard, borderColor: colors.border }]}>
+            <Text style={[s.cardTitle, { color: colors.text }]}>Distribusi Pengeluaran</Text>
             <View style={s.chartCenter}>
-              <PieChart data={pieData} donut innerRadius={45} radius={75} innerCircleColor="#FFF" />
+              <PieChart data={pieData} donut innerRadius={45} radius={75} innerCircleColor={colors.bgCard} />
             </View>
             <View style={s.breakdownList}>
               {breakdown.map(item => (
                 <View key={item.category_id} style={s.breakdownRow}>
                   <View style={[s.bDot, { backgroundColor: item.category_color }]} />
-                  <Text style={s.bName} numberOfLines={1}>{item.category_name}</Text>
-                  <Text style={s.bAmt}>{formatRupiah(item.total)}</Text>
-                  <Text style={s.bPct}>{item.percentage}%</Text>
+                  <Text style={[s.bName, { color: colors.textSecondary }]} numberOfLines={1}>{item.category_name}</Text>
+                  <Text style={[s.bAmt, { color: colors.text }]}>{formatRupiah(item.total)}</Text>
+                  <Text style={[s.bPct, { color: colors.textTertiary }]}>{item.percentage}%</Text>
                 </View>
               ))}
             </View>
@@ -135,35 +138,35 @@ export default function Reports() {
 
         {/* Statistik */}
         {stats && (
-          <View style={s.card}>
-            <Text style={s.cardTitle}>Statistik</Text>
+          <View style={[s.card, { backgroundColor: colors.bgCard, borderColor: colors.border }]}>
+            <Text style={[s.cardTitle, { color: colors.text }]}>Statistik</Text>
             <View style={s.statGrid}>
-              <View style={s.statItem}>
-                <Ionicons name="calendar-outline" size={20} color="#E86A33" />
-                <Text style={s.statLabel}>Rata-rata Harian</Text>
-                <Text style={s.statVal}>{formatRupiah(stats.avg_daily_expense)}</Text>
+              <View style={[s.statItem, { backgroundColor: colors.bgSecondary }]}>
+                <Ionicons name="calendar-outline" size={20} color={colors.accent} />
+                <Text style={[s.statLabel, { color: colors.textTertiary }]}>Rata-rata Harian</Text>
+                <Text style={[s.statVal, { color: colors.text }]}>{formatRupiah(stats.avg_daily_expense)}</Text>
               </View>
-              <View style={s.statItem}>
-                <Ionicons name="flame-outline" size={20} color="#D34A3E" />
-                <Text style={s.statLabel}>Tertinggi</Text>
-                <Text style={s.statVal}>{formatRupiah(stats.highest_day_amount)}</Text>
+              <View style={[s.statItem, { backgroundColor: colors.bgSecondary }]}>
+                <Ionicons name="flame-outline" size={20} color={colors.expense} />
+                <Text style={[s.statLabel, { color: colors.textTertiary }]}>Tertinggi</Text>
+                <Text style={[s.statVal, { color: colors.text }]}>{formatRupiah(stats.highest_day_amount)}</Text>
               </View>
-              <View style={s.statItem}>
-                <Ionicons name="receipt-outline" size={20} color="#1A4D2E" />
-                <Text style={s.statLabel}>Transaksi</Text>
-                <Text style={s.statVal}>{summary?.transaction_count || 0}</Text>
+              <View style={[s.statItem, { backgroundColor: colors.bgSecondary }]}>
+                <Ionicons name="receipt-outline" size={20} color={colors.brand} />
+                <Text style={[s.statLabel, { color: colors.textTertiary }]}>Transaksi</Text>
+                <Text style={[s.statVal, { color: colors.text }]}>{summary?.transaction_count || 0}</Text>
               </View>
-              <View style={s.statItem}>
-                <Ionicons name="today-outline" size={20} color="#7D8F69" />
-                <Text style={s.statLabel}>Hari Aktif</Text>
-                <Text style={s.statVal}>{stats.days_with_expense}</Text>
+              <View style={[s.statItem, { backgroundColor: colors.bgSecondary }]}>
+                <Ionicons name="today-outline" size={20} color={colors.income} />
+                <Text style={[s.statLabel, { color: colors.textTertiary }]}>Hari Aktif</Text>
+                <Text style={[s.statVal, { color: colors.text }]}>{stats.days_with_expense}</Text>
               </View>
             </View>
           </View>
         )}
 
         {/* Export */}
-        <TouchableOpacity testID="export-csv-btn" style={s.exportBtn} onPress={handleExportCsv} activeOpacity={0.8}>
+        <TouchableOpacity testID="export-csv-btn" style={[s.exportBtn, { backgroundColor: colors.brand }]} onPress={handleExportCsv} activeOpacity={0.8}>
           <Ionicons name="download-outline" size={20} color="#FFF" />
           <Text style={s.exportBtnText}>Export CSV</Text>
         </TouchableOpacity>
@@ -174,41 +177,39 @@ export default function Reports() {
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F9F9F6' },
+  container: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   scroll: { padding: 20, paddingBottom: 40 },
-  screenTitle: { fontSize: 24, fontWeight: '700', color: '#1A4D2E', marginBottom: 8 },
+  screenTitle: { fontSize: 24, fontWeight: '700', marginBottom: 8 },
   monthNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, gap: 16 },
-  monthText: { fontSize: 15, fontWeight: '600', color: '#1A4D2E' },
+  monthText: { fontSize: 15, fontWeight: '600' },
   summaryRow: { flexDirection: 'row', gap: 12, marginBottom: 12 },
-  summaryCard: { flex: 1, backgroundColor: '#FFF', borderRadius: 14, padding: 16, borderLeftWidth: 3, borderWidth: 1, borderColor: '#F0EBE1' },
-  sumLabel: { fontSize: 12, color: '#7D7D7D', marginBottom: 4 },
+  summaryCard: { flex: 1, borderRadius: 14, padding: 16, borderLeftWidth: 3, borderWidth: 1 },
+  sumLabel: { fontSize: 12, marginBottom: 4 },
   sumVal: { fontSize: 16, fontWeight: '700' },
-  netCard: { backgroundColor: '#FFF', borderRadius: 14, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: '#F0EBE1', alignItems: 'center' },
-  netLabel: { fontSize: 12, color: '#7D7D7D' },
+  netCard: { borderRadius: 14, padding: 16, marginBottom: 16, borderWidth: 1, alignItems: 'center' },
+  netLabel: { fontSize: 12 },
   netVal: { fontSize: 22, fontWeight: '700', marginTop: 4 },
-  card: { backgroundColor: '#FFF', borderRadius: 16, padding: 20, marginBottom: 16, borderWidth: 1, borderColor: '#F0EBE1' },
-  cardTitle: { fontSize: 16, fontWeight: '600', color: '#1A4D2E', marginBottom: 12 },
+  card: { borderRadius: 16, padding: 20, marginBottom: 16, borderWidth: 1 },
+  cardTitle: { fontSize: 16, fontWeight: '600', marginBottom: 12 },
   periodRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
-  periodPill: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 16, backgroundColor: '#F4EFEB' },
-  periodActive: { backgroundColor: '#1A4D2E' },
-  periodText: { fontSize: 12, fontWeight: '500', color: '#7D7D7D' },
-  periodTextActive: { color: '#FFF' },
+  periodPill: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 16 },
+  periodText: { fontSize: 12, fontWeight: '500' },
   chartCenter: { alignItems: 'center', marginBottom: 8 },
   lineLegend: { flexDirection: 'row', gap: 16, marginTop: 12 },
   lineLegendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   lineLegendDot: { width: 8, height: 8, borderRadius: 4 },
-  lineLegendText: { fontSize: 12, color: '#4A4A4A' },
+  lineLegendText: { fontSize: 12 },
   breakdownList: { gap: 10, marginTop: 4 },
   breakdownRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   bDot: { width: 10, height: 10, borderRadius: 5 },
-  bName: { flex: 1, fontSize: 13, color: '#4A4A4A' },
-  bAmt: { fontSize: 13, fontWeight: '600', color: '#1A4D2E' },
-  bPct: { fontSize: 12, color: '#7D7D7D', width: 40, textAlign: 'right' },
+  bName: { flex: 1, fontSize: 13 },
+  bAmt: { fontSize: 13, fontWeight: '600' },
+  bPct: { fontSize: 12, width: 40, textAlign: 'right' },
   statGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  statItem: { width: '46%' as any, backgroundColor: '#F9F9F6', borderRadius: 12, padding: 14, gap: 4 },
-  statLabel: { fontSize: 12, color: '#7D7D7D' },
-  statVal: { fontSize: 16, fontWeight: '700', color: '#1A4D2E' },
-  exportBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#1A4D2E', borderRadius: 14, paddingVertical: 14, gap: 8 },
+  statItem: { width: '46%' as any, borderRadius: 12, padding: 14, gap: 4 },
+  statLabel: { fontSize: 12 },
+  statVal: { fontSize: 16, fontWeight: '700' },
+  exportBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: 14, paddingVertical: 14, gap: 8 },
   exportBtnText: { fontSize: 15, fontWeight: '600', color: '#FFF' },
 });

@@ -5,10 +5,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { api } from '../src/utils/api';
 import { formatAmountInput, parseAmountInput } from '../src/utils/format';
+import { useTheme } from '../src/contexts/ThemeContext';
 import type { Category } from '../src/types';
 
 export default function AddTransaction() {
   const router = useRouter();
+  const { colors } = useTheme();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const isEdit = !!id;
 
@@ -40,7 +42,6 @@ export default function AddTransaction() {
 
   const filteredCats = categories.filter(c => c.type === type);
 
-  // Auto-select first category when type changes
   useEffect(() => {
     if (filteredCats.length > 0 && !filteredCats.find(c => c.id === categoryId)) {
       setCategoryId(filteredCats[0].id);
@@ -67,69 +68,69 @@ export default function AddTransaction() {
   };
 
   if (initLoading) {
-    return <SafeAreaView style={s.container}><View style={s.center}><ActivityIndicator size="large" color="#1A4D2E" /></View></SafeAreaView>;
+    return <SafeAreaView style={[s.container, { backgroundColor: colors.bg }]}><View style={s.center}><ActivityIndicator size="large" color={colors.brand} /></View></SafeAreaView>;
   }
 
   return (
-    <SafeAreaView style={s.container} testID="add-transaction-screen">
+    <SafeAreaView style={[s.container, { backgroundColor: colors.bg }]} testID="add-transaction-screen">
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         {/* Header */}
-        <View style={s.header}>
+        <View style={[s.header, { borderBottomColor: colors.border }]}>
           <TouchableOpacity testID="close-add-tx" onPress={() => router.back()}>
-            <Ionicons name="close" size={26} color="#1A4D2E" />
+            <Ionicons name="close" size={26} color={colors.text} />
           </TouchableOpacity>
-          <Text style={s.headerTitle}>{isEdit ? 'Edit Transaksi' : 'Tambah Transaksi'}</Text>
+          <Text style={[s.headerTitle, { color: colors.text }]}>{isEdit ? 'Edit Transaksi' : 'Tambah Transaksi'}</Text>
           <View style={{ width: 26 }} />
         </View>
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
           {/* Tipe Toggle */}
           <View style={s.typeRow}>
-            <TouchableOpacity testID="type-expense" style={[s.typeBtn, type === 'expense' && s.typeBtnActiveExp]}
+            <TouchableOpacity testID="type-expense" style={[s.typeBtn, { backgroundColor: colors.bgCard, borderColor: colors.border }, type === 'expense' && { backgroundColor: colors.expense, borderColor: colors.expense }]}
               onPress={() => setType('expense')}>
-              <Ionicons name="arrow-down-circle" size={18} color={type === 'expense' ? '#FFF' : '#D34A3E'} />
-              <Text style={[s.typeText, type === 'expense' && s.typeTextActive]}>Pengeluaran</Text>
+              <Ionicons name="arrow-down-circle" size={18} color={type === 'expense' ? '#FFF' : colors.expense} />
+              <Text style={[s.typeText, { color: colors.textSecondary }, type === 'expense' && s.typeTextActive]}>Pengeluaran</Text>
             </TouchableOpacity>
-            <TouchableOpacity testID="type-income" style={[s.typeBtn, type === 'income' && s.typeBtnActiveInc]}
+            <TouchableOpacity testID="type-income" style={[s.typeBtn, { backgroundColor: colors.bgCard, borderColor: colors.border }, type === 'income' && { backgroundColor: colors.income, borderColor: colors.income }]}
               onPress={() => setType('income')}>
-              <Ionicons name="arrow-up-circle" size={18} color={type === 'income' ? '#FFF' : '#3A6E4B'} />
-              <Text style={[s.typeText, type === 'income' && s.typeTextActive]}>Pemasukan</Text>
+              <Ionicons name="arrow-up-circle" size={18} color={type === 'income' ? '#FFF' : colors.income} />
+              <Text style={[s.typeText, { color: colors.textSecondary }, type === 'income' && s.typeTextActive]}>Pemasukan</Text>
             </TouchableOpacity>
           </View>
 
           {/* Jumlah */}
-          <View style={s.amountCard}>
-            <Text style={s.label}>Jumlah</Text>
+          <View style={[s.amountCard, { backgroundColor: colors.bgCard, borderColor: colors.border }]}>
+            <Text style={[s.label, { color: colors.textTertiary }]}>Jumlah</Text>
             <View style={s.amountRow}>
-              <Text style={s.rupiah}>Rp</Text>
-              <TextInput testID="amount-input" style={s.amountInput} keyboardType="numeric" placeholder="0"
+              <Text style={[s.rupiah, { color: colors.text }]}>Rp</Text>
+              <TextInput testID="amount-input" style={[s.amountInput, { color: colors.text }]} keyboardType="numeric" placeholder="0"
                 value={formatAmountInput(amount)} onChangeText={t => setAmount(t.replace(/\D/g, ''))}
-                placeholderTextColor="#C2A878" />
+                placeholderTextColor={colors.textTertiary} />
             </View>
           </View>
 
           {/* Kategori */}
-          <Text style={s.label}>Kategori</Text>
+          <Text style={[s.label, { color: colors.textTertiary }]}>Kategori</Text>
           <View style={s.catGrid}>
             {filteredCats.map(cat => (
               <TouchableOpacity key={cat.id} testID={`cat-${cat.id}`}
-                style={[s.catItem, categoryId === cat.id && { backgroundColor: cat.color + '20', borderColor: cat.color }]}
+                style={[s.catItem, { backgroundColor: colors.bgCard, borderColor: colors.border }, categoryId === cat.id && { backgroundColor: cat.color + '20', borderColor: cat.color }]}
                 onPress={() => setCategoryId(cat.id)}>
                 <View style={[s.catIconBg, { backgroundColor: cat.color + '18' }]}>
                   <Ionicons name={cat.icon as any} size={20} color={cat.color} />
                 </View>
-                <Text style={[s.catName, categoryId === cat.id && { color: cat.color, fontWeight: '600' }]} numberOfLines={1}>{cat.name}</Text>
+                <Text style={[s.catName, { color: colors.textSecondary }, categoryId === cat.id && { color: cat.color, fontWeight: '600' }]} numberOfLines={1}>{cat.name}</Text>
               </TouchableOpacity>
             ))}
           </View>
 
           {/* Deskripsi */}
-          <Text style={s.label}>Catatan (Opsional)</Text>
-          <TextInput testID="description-input" style={s.descInput} placeholder="Contoh: Makan siang di kantin"
-            value={description} onChangeText={setDescription} multiline placeholderTextColor="#7D7D7D" />
+          <Text style={[s.label, { color: colors.textTertiary }]}>Catatan (Opsional)</Text>
+          <TextInput testID="description-input" style={[s.descInput, { backgroundColor: colors.bgCard, color: colors.text, borderColor: colors.border }]} placeholder="Contoh: Makan siang di kantin"
+            value={description} onChangeText={setDescription} multiline placeholderTextColor={colors.textTertiary} />
 
           {/* Tombol Simpan */}
-          <TouchableOpacity testID="save-transaction-btn" style={[s.saveBtn, loading && s.saveBtnDisabled]}
+          <TouchableOpacity testID="save-transaction-btn" style={[s.saveBtn, { backgroundColor: colors.brand }, loading && s.saveBtnDisabled]}
             onPress={handleSave} disabled={loading} activeOpacity={0.8}>
             {loading ? <ActivityIndicator color="#FFF" /> : (
               <>
@@ -145,28 +146,26 @@ export default function AddTransaction() {
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F9F9F6' },
+  container: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F0EBE1' },
-  headerTitle: { fontSize: 17, fontWeight: '600', color: '#1A4D2E' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 12, borderBottomWidth: 1 },
+  headerTitle: { fontSize: 17, fontWeight: '600' },
   scroll: { padding: 20, paddingBottom: 40 },
   typeRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
-  typeBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 12, backgroundColor: '#FFF', borderWidth: 1, borderColor: '#F0EBE1' },
-  typeBtnActiveExp: { backgroundColor: '#D34A3E', borderColor: '#D34A3E' },
-  typeBtnActiveInc: { backgroundColor: '#3A6E4B', borderColor: '#3A6E4B' },
-  typeText: { fontSize: 14, fontWeight: '500', color: '#4A4A4A' },
+  typeBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 12, borderWidth: 1 },
+  typeText: { fontSize: 14, fontWeight: '500' },
   typeTextActive: { color: '#FFF' },
-  amountCard: { backgroundColor: '#FFF', borderRadius: 16, padding: 20, marginBottom: 20, borderWidth: 1, borderColor: '#F0EBE1' },
-  label: { fontSize: 13, fontWeight: '600', color: '#7D7D7D', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
+  amountCard: { borderRadius: 16, padding: 20, marginBottom: 20, borderWidth: 1 },
+  label: { fontSize: 13, fontWeight: '600', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
   amountRow: { flexDirection: 'row', alignItems: 'center' },
-  rupiah: { fontSize: 22, fontWeight: '600', color: '#1A4D2E', marginRight: 8 },
-  amountInput: { flex: 1, fontSize: 32, fontWeight: '700', color: '#1A4D2E', padding: 0 },
+  rupiah: { fontSize: 22, fontWeight: '600', marginRight: 8 },
+  amountInput: { flex: 1, fontSize: 32, fontWeight: '700', padding: 0 },
   catGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 20 },
-  catItem: { width: '30%' as any, alignItems: 'center', paddingVertical: 12, borderRadius: 12, backgroundColor: '#FFF', borderWidth: 1, borderColor: '#F0EBE1' },
+  catItem: { width: '30%' as any, alignItems: 'center', paddingVertical: 12, borderRadius: 12, borderWidth: 1 },
   catIconBg: { width: 36, height: 36, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginBottom: 6 },
-  catName: { fontSize: 11, color: '#4A4A4A', textAlign: 'center', paddingHorizontal: 4 },
-  descInput: { backgroundColor: '#FFF', borderRadius: 12, padding: 14, fontSize: 14, color: '#1A4D2E', minHeight: 60, textAlignVertical: 'top', borderWidth: 1, borderColor: '#F0EBE1', marginBottom: 24 },
-  saveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#1A4D2E', borderRadius: 14, paddingVertical: 16, gap: 8 },
+  catName: { fontSize: 11, textAlign: 'center', paddingHorizontal: 4 },
+  descInput: { borderRadius: 12, padding: 14, fontSize: 14, minHeight: 60, textAlignVertical: 'top', borderWidth: 1, marginBottom: 24 },
+  saveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: 14, paddingVertical: 16, gap: 8 },
   saveBtnDisabled: { opacity: 0.6 },
   saveBtnText: { fontSize: 16, fontWeight: '600', color: '#FFF' },
 });

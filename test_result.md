@@ -43,8 +43,8 @@
 ##
 ## metadata:
 ##   created_by: "main_agent"
-##   version: "1.0"
-##   test_sequence: 0
+##   version: "2.0"
+##   test_sequence: 1
 ##   run_ui: false
 ##
 ## test_plan:
@@ -101,3 +101,195 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+user_problem_statement: "BudgetWise personal finance app with JWT multi-user Auth, Dark Mode, and all CRUD features. Backend: FastAPI + MongoDB. Frontend: Expo React Native."
+
+backend:
+  - task: "Auth - Register endpoint"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+        - agent: "main"
+        - comment: "POST /api/auth/register - creates user, returns tokens. Manually tested with curl OK."
+        - working: true
+        - agent: "testing"
+        - comment: "Comprehensive testing completed. Auth register works correctly: creates user with proper validation, returns user + tokens, correctly rejects duplicate emails with 400 status, password validation (min 6 chars) working."
+
+  - task: "Auth - Login endpoint"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+        - agent: "main"
+        - comment: "POST /api/auth/login - returns user + tokens. Manually tested with curl OK."
+        - working: true
+        - agent: "testing"
+        - comment: "Login endpoint fully functional. Successfully authenticates admin@example.com and test@example.com users, returns proper user data + access/refresh tokens, correctly rejects invalid passwords with 401 status."
+
+  - task: "Auth - Get Me endpoint"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+        - agent: "main"
+        - comment: "GET /api/auth/me with Bearer token. Returns user info."
+        - working: true
+        - agent: "testing"
+        - comment: "Auth me endpoint working perfectly. Correctly validates Bearer tokens and returns authenticated user information."
+
+  - task: "Auth - Refresh Token"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+        - agent: "main"
+        - comment: "POST /api/auth/refresh"
+        - working: true
+        - agent: "testing"
+        - comment: "Token refresh endpoint working correctly. Accepts refresh tokens and returns new access tokens."
+
+  - task: "Categories CRUD with user isolation"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+        - agent: "main"
+        - comment: "GET/POST/PUT/DELETE /api/categories - requires auth, shows defaults + user custom"
+        - working: true
+        - agent: "testing"
+        - comment: "Categories CRUD fully functional. GET returns 14 default categories + user custom ones, POST creates new categories with proper user_id, PUT updates user categories (blocks default category updates), DELETE removes user categories (blocks default category deletion). User isolation working correctly."
+
+  - task: "Transactions CRUD with user isolation"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+        - agent: "main"
+        - comment: "GET/POST/PUT/DELETE /api/transactions - filtered by user_id"
+        - working: true
+        - agent: "testing"
+        - comment: "Transactions CRUD working perfectly. All operations properly filter by user_id. User isolation verified - users cannot access other users' transactions. GET with pagination, POST creates with user_id, PUT updates only user's transactions, DELETE removes only user's transactions."
+
+  - task: "Budgets CRUD with user isolation"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+        - agent: "main"
+        - comment: "GET/POST/DELETE /api/budgets - filtered by user_id"
+        - working: true
+        - agent: "testing"
+        - comment: "Budgets CRUD working correctly. GET filters by user_id, POST creates/updates budgets for user, DELETE removes user's budgets only. User isolation properly implemented."
+
+  - task: "Analytics endpoints with auth"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+        - agent: "main"
+        - comment: "Summary, category-breakdown, daily-trend, monthly-trend, stats - all require auth"
+        - working: true
+        - agent: "testing"
+        - comment: "All analytics endpoints working correctly. Summary, category-breakdown, daily-trend, monthly-trend, and stats all require authentication and return proper data filtered by user_id."
+
+  - task: "Settings CRUD with auth"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+        - agent: "main"
+        - comment: "GET/PUT /api/settings, PIN set/verify/remove"
+        - working: true
+        - agent: "testing"
+        - comment: "Settings endpoints fully functional. GET/PUT settings work correctly, PIN operations (set/verify/remove) working properly with 6-digit validation and SHA256 hashing."
+
+  - task: "Weekly Report endpoint"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+        - agent: "main"
+        - comment: "GET /api/reports/weekly - returns 7-day summary"
+        - working: true
+        - agent: "testing"
+        - comment: "Weekly report endpoint working correctly. Returns comprehensive 7-day summary with period dates, expenses, income, net, top category, and budget comparison."
+
+  - task: "Export/Backup endpoints"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "low"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+        - agent: "main"
+        - comment: "CSV export, backup, import, reset"
+        - working: true
+        - agent: "testing"
+        - comment: "Export/backup endpoints working perfectly. CSV export returns proper CSV format, backup exports user data (transactions/categories/budgets), import restores user data, data reset clears user data while preserving defaults."
+
+metadata:
+  created_by: "main_agent"
+  version: "2.0"
+  test_sequence: 1
+  run_ui: false
+
+test_plan:
+  current_focus: []
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+    - agent: "main"
+    - message: "Full backend auth + CRUD implementation complete. All endpoints require JWT Bearer token. Test credentials: admin@example.com / admin123 (seeded on startup). Also test@example.com / test1234 (registered via curl). Test user isolation - each user should only see their own data. Default categories are shared (is_default: true). Auth endpoints: POST /api/auth/register, POST /api/auth/login, GET /api/auth/me, POST /api/auth/refresh. All other endpoints require Authorization: Bearer <token> header."
+    - agent: "testing"
+    - message: "BACKEND TESTING COMPLETE ✅ All 36 backend tests passed successfully! Comprehensive testing completed for: Auth (register/login/me/refresh with proper validation), User isolation (verified users cannot access each other's data), CRUD operations (categories/transactions/budgets with proper user filtering), Analytics (all 5 endpoints working), Settings (including PIN operations), Weekly reports, Export/backup functionality. All endpoints properly require authentication except public ones. Backend is fully functional and ready for production."
+
+test_credentials:
+    email: "admin@example.com"
+    password: "admin123"
+    alt_email: "test@example.com"
+    alt_password: "test1234"

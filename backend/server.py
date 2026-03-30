@@ -94,6 +94,12 @@ class SettingsUpdate(BaseModel):
     date_format: Optional[str] = None
     theme: Optional[str] = None
     profile_name: Optional[str] = None
+    weekly_report_enabled: Optional[bool] = None
+    weekly_report_day: Optional[int] = None  # 1=Mon, 2=Tue, ..., 7=Sun
+    weekly_report_hour: Optional[int] = None  # 0-23
+
+class PushTokenRequest(BaseModel):
+    token: str
 
 class PinRequest(BaseModel):
     pin: str
@@ -402,11 +408,16 @@ async def get_weekly_report(user: dict = Depends(get_current_user)):
 async def get_settings(user: dict = Depends(get_current_user)):
     s = await db.settings.find_one({"user_id": user["id"]}, {"_id": 0})
     if not s:
-        s = {"user_id": user["id"], "currency": "IDR", "theme": "light", "pin_hash": ""}
+        s = {"user_id": user["id"], "currency": "IDR", "theme": "light", "pin_hash": "",
+             "weekly_report_enabled": False, "weekly_report_day": 1, "weekly_report_hour": 9, "push_token": ""}
         await db.settings.insert_one(s)
         s.pop("_id", None)
     s["has_pin"] = bool(s.get("pin_hash"))
     s.pop("pin_hash", None)
+    s.pop("push_token", None)
+    s.setdefault("weekly_report_enabled", False)
+    s.setdefault("weekly_report_day", 1)
+    s.setdefault("weekly_report_hour", 9)
     return s
 
 @api_router.put("/settings")
@@ -417,6 +428,11 @@ async def update_settings(data: SettingsUpdate, user: dict = Depends(get_current
     s["has_pin"] = bool(s.get("pin_hash"))
     s.pop("pin_hash", None)
     return s
+
+@api_router.post("/notifications/register")
+async def register_push_token(data: PushTokenRequest, user: dict = Depends(get_current_user)):
+    await db.settings.update_one({"user_id": user["id"]}, {"$set": {"push_token": data.token}}, upsert=True)
+    return {"message": "Token registered"}
 
 @api_router.post("/settings/pin/set")
 async def set_pin(data: PinRequest, user: dict = Depends(get_current_user)):

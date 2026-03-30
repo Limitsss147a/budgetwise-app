@@ -424,24 +424,36 @@ frontend:
 metadata:
   created_by: "main_agent"
   version: "2.0"
-  test_sequence: 2
-  run_ui: true
+  test_sequence: 3
+  run_ui: false
+
+backend:
+  - task: "Notification settings and push token endpoint"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+        - agent: "main"
+        - comment: "NEW ENDPOINTS ADDED - Please test: 1) GET /api/settings now returns weekly_report_enabled, weekly_report_day, weekly_report_hour fields. 2) PUT /api/settings with weekly_report_enabled/day/hour - should update notification settings. 3) POST /api/notifications/register with {token: string} - should register push token. Auth required on all endpoints. Use test credentials: admin@example.com / admin123."
+        - working: true
+        - agent: "testing"
+        - comment: "Comprehensive testing completed successfully. All notification endpoints working correctly: 1) GET /api/settings includes weekly_report_enabled (bool), weekly_report_day (int 1-7), weekly_report_hour (int 0-23) with proper defaults (false, 1, 9). 2) PUT /api/settings successfully updates notification settings and can enable/disable reports. 3) POST /api/notifications/register accepts push tokens and returns 'Token registered' message. 4) All endpoints properly require Bearer token authentication (401 without auth). 5) Existing settings functionality (profile_name, currency, theme, PIN) remains intact. No validation on day/hour ranges in current implementation but accepts valid values correctly."
 
 test_plan:
   current_focus: []
   stuck_tasks: []
   test_all: false
-  test_priority: "completed"
+  test_priority: "high_first"
 
 agent_communication:
     - agent: "main"
-    - message: "Full backend auth + CRUD implementation complete. All endpoints require JWT Bearer token. Test credentials: admin@example.com / admin123 (seeded on startup). Also test@example.com / test1234 (registered via curl). Test user isolation - each user should only see their own data. Default categories are shared (is_default: true). Auth endpoints: POST /api/auth/register, POST /api/auth/login, GET /api/auth/me, POST /api/auth/refresh. All other endpoints require Authorization: Bearer <token> header."
+    - message: "NEW ENDPOINTS ADDED - Please test: 1) GET /api/settings now returns weekly_report_enabled, weekly_report_day, weekly_report_hour fields. 2) PUT /api/settings with weekly_report_enabled/day/hour - should update notification settings. 3) POST /api/notifications/register with {token: string} - should register push token. Auth required on all endpoints. Use test credentials: admin@example.com / admin123."
     - agent: "testing"
-    - message: "BACKEND TESTING COMPLETE ✅ All 36 backend tests passed successfully! Comprehensive testing completed for: Auth (register/login/me/refresh with proper validation), User isolation (verified users cannot access each other's data), CRUD operations (categories/transactions/budgets with proper user filtering), Analytics (all 5 endpoints working), Settings (including PIN operations), Weekly reports, Export/backup functionality. All endpoints properly require authentication except public ones. Backend is fully functional and ready for production."
-    - agent: "main"
-    - message: "FRONTEND E2E TESTING REQUESTED. Please test ALL frontend screens comprehensively. Test credentials: admin@example.com / admin123. The app uses Poppins custom font and has Dark Mode support. Key test flows: 1) Login → Dashboard, 2) Register new user → Dashboard, 3) Add income transaction → verify on Dashboard/Transactions, 4) Add expense transaction → verify, 5) Navigate all tabs (Beranda/Transaksi/Laporan/Anggaran/Pengaturan), 6) Toggle Dark Mode in Settings → verify all screens look correct, 7) Set/remove PIN, 8) Set Budget, 9) Check Reports with data. Frontend runs on http://localhost:3000. Mobile viewport: 390x844."
-    - agent: "testing"
-    - message: "FRONTEND TESTING COMPLETE ✅ Comprehensive code review and testing completed for all 9 frontend tasks. All screens properly implemented with: 1) Proper testID attributes for automation, 2) Poppins font applied consistently, 3) Dark mode support with proper color schemes (#0D1117 bg, #56D364 income, #F85149 expense), 4) Complete functionality (auth, CRUD, charts, filters, navigation), 5) Mobile-responsive design, 6) Indonesian language UI. App confirmed running at localhost:3000. All authentication flows, transaction management, reporting, budgeting, and settings features working correctly. Ready for production use."
+    - message: "✅ NOTIFICATION ENDPOINTS TESTING COMPLETE - All 7 test scenarios passed successfully. Key findings: 1) GET /api/settings correctly returns all notification fields with proper defaults. 2) PUT /api/settings successfully updates notification preferences and can toggle enable/disable. 3) POST /api/notifications/register works correctly with ExponentPushToken format. 4) All endpoints properly protected with Bearer token auth. 5) Existing settings functionality (profile_name, currency, theme, PIN) remains fully functional. 6) No input validation on day (1-7) or hour (0-23) ranges but accepts valid values. All endpoints tested with admin@example.com credentials and working as expected."
 
 test_credentials:
     email: "admin@example.com"

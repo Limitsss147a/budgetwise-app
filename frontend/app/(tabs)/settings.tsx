@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, TextInput, Switch, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, TextInput, Switch, ActivityIndicator, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
@@ -7,6 +7,7 @@ import { api } from '../../src/utils/api';
 import { useTheme } from '../../src/contexts/ThemeContext';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { fonts } from '../../src/constants/fonts';
+import { requestNotificationPermissions, scheduleWeeklyReport, cancelWeeklyReport, sendTestNotification, getDayName } from '../../src/services/notifications';
 import type { Settings } from '../../src/types';
 
 export default function SettingsScreen() {
@@ -17,12 +18,18 @@ export default function SettingsScreen() {
   const [profileName, setProfileName] = useState('');
   const [showPinSetup, setShowPinSetup] = useState(false);
   const [newPin, setNewPin] = useState('');
+  const [weeklyEnabled, setWeeklyEnabled] = useState(false);
+  const [weeklyDay, setWeeklyDay] = useState(1);
+  const [weeklyHour, setWeeklyHour] = useState(9);
 
   const loadSettings = useCallback(async () => {
     try {
       const s = await api.getSettings();
       setSettings(s);
       setProfileName(s.profile_name || user?.name || '');
+      setWeeklyEnabled(s.weekly_report_enabled || false);
+      setWeeklyDay(s.weekly_report_day || 1);
+      setWeeklyHour(s.weekly_report_hour || 9);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   }, [user]);
@@ -82,6 +89,59 @@ export default function SettingsScreen() {
     ]);
   };
 
+  const handleToggleWeeklyReport = async (enabled: boolean) => {
+    setWeeklyEnabled(enabled);
+    if (enabled) {
+      if (Platform.OS === 'web') {
+        Alert.alert('Info', 'Notifikasi hanya tersedia di perangkat mobile (iOS/Android)');
+        setWeeklyEnabled(false);
+        return;
+      }
+      const granted = await requestNotificationPermissions();
+      if (!granted) {
+        Alert.alert('Izin Ditolak', 'Aktifkan izin notifikasi di Pengaturan perangkat');
+        setWeeklyEnabled(false);
+        return;
+      }
+      await scheduleWeeklyReport(weeklyDay, weeklyHour);
+      await api.updateSettings({ weekly_report_enabled: true, weekly_report_day: weeklyDay, weekly_report_hour: weeklyHour });
+      Alert.alert('Berhasil', `Laporan mingguan dijadwalkan setiap ${getDayName(weeklyDay)} pukul ${weeklyHour}:00`);
+    } else {
+      await cancelWeeklyReport();
+      await api.updateSettings({ weekly_report_enabled: false });
+    }
+  };
+
+  const handleDayChange = async (newDay: number) => {
+    setWeeklyDay(newDay);
+    if (weeklyEnabled) {
+      await scheduleWeeklyReport(newDay, weeklyHour);
+      await api.updateSettings({ weekly_report_day: newDay });
+    }
+  };
+
+  const handleHourChange = async (newHour: number) => {
+    setWeeklyHour(newHour);
+    if (weeklyEnabled) {
+      await scheduleWeeklyReport(weeklyDay, newHour);
+      await api.updateSettings({ weekly_report_hour: newHour });
+    }
+  };
+
+  const handleTestNotification = async () => {
+    if (Platform.OS === 'web') {
+      Alert.alert('Info', 'Notifikasi hanya tersedia di perangkat mobile');
+      return;
+    }
+    const granted = await requestNotificationPermissions();
+    if (!granted) {
+      Alert.alert('Izin Ditolak', 'Aktifkan izin notifikasi di Pengaturan perangkat');
+      return;
+    }
+    await sendTestNotification();
+    Alert.alert('Terkirim', 'Notifikasi contoh telah dikirim!');
+  };
+
   if (loading) {
     return <SafeAreaView style={[st.container, { backgroundColor: colors.bg }]}><View style={st.center}><ActivityIndicator size="large" color={colors.brand} /></View></SafeAreaView>;
   }
@@ -126,6 +186,58 @@ export default function SettingsScreen() {
                 thumbColor={theme === 'dark' ? colors.accent : '#f4f3f4'}
               />
             </View>
+          </View>
+        </View>
+
+        {/* Notifikasi */}
+        <View style={st.section}>
+          <Text style={[st.sectionTitle, { color: colors.textTertiary, fontFamily: fonts.semiBold }]}>Notifikasi</Text>
+          <View style={[st.card, { backgroundColor: colors.bgCard, borderColor: colors.border }]}>
+            <View style={st.settingRow}>
+              <Ionicons name="notifications-outline" size={20} color={colors.brand} />
+              <Text style={[st.settingLabel, { color: colors.text, fontFamily: fonts.medium }]}>Laporan Mingguan</Text>
+              <Switch
+                testID="weekly-report-toggle"
+                value={weeklyEnabled}
+                onValueChange={handleToggleWeeklyReport}
+                trackColor={{ false: colors.border, true: colors.brand }}
+                thumbColor={weeklyEnabled ? colors.accent : '#f4f3f4'}
+              />
+            </View>
+            {weeklyEnabled && (
+              <>
+                <View style={[st.divider, { backgroundColor: colors.border }]} />
+                <View style={{ paddingVertical: 8 }}>
+                  <Text style={[st.subLabel, { color: colors.textTertiary, fontFamily: fonts.regular }]}>Hari Pengiriman</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
+                    {[1,2,3,4,5,6,7].map(d => (
+                      <TouchableOpacity key={d} testID={`day-${d}`}
+                        style={[st.dayPill, { backgroundColor: colors.bgSecondary, borderColor: colors.border }, weeklyDay === d && { backgroundColor: colors.brand, borderColor: colors.brand }]}
+                        onPress={() => handleDayChange(d)}>
+                        <Text style={[st.dayText, { color: colors.textTertiary, fontFamily: fonts.medium }, weeklyDay === d && { color: colors.textInverse }]}>{getDayName(d)}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+                <View style={{ paddingVertical: 8 }}>
+                  <Text style={[st.subLabel, { color: colors.textTertiary, fontFamily: fonts.regular }]}>Jam Pengiriman</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
+                    {[7,8,9,10,12,14,17,19,21].map(h => (
+                      <TouchableOpacity key={h} testID={`hour-${h}`}
+                        style={[st.dayPill, { backgroundColor: colors.bgSecondary, borderColor: colors.border }, weeklyHour === h && { backgroundColor: colors.brand, borderColor: colors.brand }]}
+                        onPress={() => handleHourChange(h)}>
+                        <Text style={[st.dayText, { color: colors.textTertiary, fontFamily: fonts.medium }, weeklyHour === h && { color: colors.textInverse }]}>{h}:00</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+                <View style={[st.divider, { backgroundColor: colors.border }]} />
+                <TouchableOpacity testID="test-notification-btn" style={[st.testNotifBtn, { backgroundColor: colors.bgSecondary }]} onPress={handleTestNotification} activeOpacity={0.7}>
+                  <Ionicons name="paper-plane-outline" size={16} color={colors.brand} />
+                  <Text style={[st.testNotifText, { color: colors.brand, fontFamily: fonts.semiBold }]}>Kirim Notifikasi Contoh</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
         </View>
 
@@ -241,4 +353,9 @@ const st = StyleSheet.create({
   cancelText: { fontSize: 13, paddingVertical: 10 },
   logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 16, borderRadius: 14, borderWidth: 1.5, marginTop: 4 },
   logoutText: { fontSize: 16 },
+  subLabel: { fontSize: 12 },
+  dayPill: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, marginRight: 8 },
+  dayText: { fontSize: 12 },
+  testNotifBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, borderRadius: 10, marginTop: 4 },
+  testNotifText: { fontSize: 13 },
 });

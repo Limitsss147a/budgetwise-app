@@ -37,6 +37,9 @@ export interface Settings {
   has_pin: boolean;
   profile_name: string;
   profile_photo: string;
+  weekly_report_enabled: boolean;
+  weekly_report_day: number;
+  weekly_report_hour: number;
 }
 
 export interface Summary {

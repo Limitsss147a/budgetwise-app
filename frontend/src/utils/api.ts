@@ -52,6 +52,7 @@ export const api = {
   setPin: (pin: string) => request('/api/settings/pin/set', { method: 'POST', body: JSON.stringify({ pin }) }),
   verifyPin: (pin: string) => request('/api/settings/pin/verify', { method: 'POST', body: JSON.stringify({ pin }) }),
   removePin: () => request('/api/settings/pin', { method: 'DELETE' }),
+  registerPushToken: (token: string) => request('/api/notifications/register', { method: 'POST', body: JSON.stringify({ token }) }),
 
   getExportCsvUrl: (month?: string) => `${BASE_URL}/api/export/csv${month ? `?month=${month}` : ''}`,
   getBackup: () => request('/api/export/backup'),

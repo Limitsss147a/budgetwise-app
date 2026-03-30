@@ -1,10 +1,12 @@
 import { Stack, useRouter, useSegments } from 'expo-router';
-import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import React, { useEffect, useState, useRef } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
+import * as Notifications from 'expo-notifications';
 import { useFonts, Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, Poppins_700Bold } from '@expo-google-fonts/poppins';
+import { Ionicons } from '@expo/vector-icons';
 import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
 import { ThemeProvider, useTheme } from '../src/contexts/ThemeContext';
 import { api } from '../src/utils/api';
@@ -53,6 +55,7 @@ function AuthGate() {
   const [pinRequired, setPinRequired] = useState(false);
   const [pinChecked, setPinChecked] = useState(false);
   const [unlocked, setUnlocked] = useState(false);
+  const notificationResponseListener = useRef<Notifications.EventSubscription | null>(null);
 
   useEffect(() => {
     if (isLoading) return;
@@ -70,6 +73,22 @@ function AuthGate() {
       }).catch(() => { setUnlocked(true); setPinChecked(true); });
     }
   }, [user, pinChecked]);
+
+  // Handle notification tap - navigate to Reports
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    notificationResponseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
+      const data = response.notification.request.content.data;
+      if (data?.screen === 'reports') {
+        router.push('/(tabs)/reports' as any);
+      }
+    });
+    return () => {
+      if (notificationResponseListener.current) {
+        Notifications.removeNotificationSubscription(notificationResponseListener.current);
+      }
+    };
+  }, [router]);
 
   if (isLoading) {
     return <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.bg }}><ActivityIndicator size="large" color={colors.brand} /></View>;
@@ -98,6 +117,7 @@ export default function RootLayout() {
     Poppins_500Medium,
     Poppins_600SemiBold,
     Poppins_700Bold,
+    ...Ionicons.font,
   });
 
   useEffect(() => {

@@ -4,12 +4,20 @@ import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Platform }
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
-import * as Notifications from 'expo-notifications';
 import { useFonts, Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, Poppins_700Bold } from '@expo-google-fonts/poppins';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
 import { ThemeProvider, useTheme } from '../src/contexts/ThemeContext';
 import { api } from '../src/utils/api';
+import { notificationsAvailable } from '../src/services/notifications';
+
+// Safely load expo-notifications
+let Notifications: typeof import('expo-notifications') | null = null;
+try {
+  Notifications = require('expo-notifications');
+} catch {
+  // Not available in Expo Go
+}
 
 SplashScreen.preventAutoHideAsync();
 
@@ -55,7 +63,7 @@ function AuthGate() {
   const [pinRequired, setPinRequired] = useState(false);
   const [pinChecked, setPinChecked] = useState(false);
   const [unlocked, setUnlocked] = useState(false);
-  const notificationResponseListener = useRef<Notifications.EventSubscription | null>(null);
+  const notificationResponseListener = useRef<any>(null);
 
   useEffect(() => {
     if (isLoading) return;
@@ -76,16 +84,20 @@ function AuthGate() {
 
   // Handle notification tap - navigate to Reports
   useEffect(() => {
-    if (Platform.OS === 'web') return;
-    notificationResponseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
-      const data = response.notification.request.content.data;
-      if (data?.screen === 'reports') {
-        router.push('/(tabs)/reports' as any);
-      }
-    });
+    if (Platform.OS === 'web' || !notificationsAvailable || !Notifications) return;
+    try {
+      notificationResponseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
+        const data = response.notification.request.content.data;
+        if (data?.screen === 'reports') {
+          router.push('/(tabs)/reports' as any);
+        }
+      });
+    } catch (e) {
+      console.warn('[Layout] Failed to add notification listener:', e);
+    }
     return () => {
       if (notificationResponseListener.current) {
-        Notifications.removeNotificationSubscription(notificationResponseListener.current);
+        try { notificationResponseListener.current.remove(); } catch {}
       }
     };
   }, [router]);

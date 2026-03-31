@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import SafeStorage from '../utils/storage';
 import { setAuthToken } from '../utils/api';
 
 interface User { id: string; email: string; name: string; role: string; }
@@ -31,7 +31,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const restoreSession = async () => {
     try {
-      const stored = await AsyncStorage.getItem('access_token');
+      const stored = await SafeStorage.getItem('access_token');
       if (stored) {
         setAuthToken(stored);
         const res = await fetch(`${BASE_URL}/api/auth/me`, { headers: { Authorization: `Bearer ${stored}` } });
@@ -39,7 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const data = await res.json();
           setUser(data.user); setToken(stored);
         } else {
-          await AsyncStorage.multiRemove(['access_token', 'refresh_token']);
+          await SafeStorage.multiRemove(['access_token', 'refresh_token']);
           setAuthToken(null);
         }
       }
@@ -57,8 +57,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error(typeof err.detail === 'string' ? err.detail : 'Login gagal');
     }
     const data = await res.json();
-    await AsyncStorage.setItem('access_token', data.access_token);
-    await AsyncStorage.setItem('refresh_token', data.refresh_token);
+    await SafeStorage.setItem('access_token', data.access_token);
+    await SafeStorage.setItem('refresh_token', data.refresh_token);
     setAuthToken(data.access_token);
     setUser(data.user); setToken(data.access_token);
   };
@@ -73,14 +73,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error(typeof err.detail === 'string' ? err.detail : 'Registrasi gagal');
     }
     const data = await res.json();
-    await AsyncStorage.setItem('access_token', data.access_token);
-    await AsyncStorage.setItem('refresh_token', data.refresh_token);
+    await SafeStorage.setItem('access_token', data.access_token);
+    await SafeStorage.setItem('refresh_token', data.refresh_token);
     setAuthToken(data.access_token);
     setUser(data.user); setToken(data.access_token);
   };
 
   const logout = async () => {
-    await AsyncStorage.multiRemove(['access_token', 'refresh_token']);
+    await SafeStorage.multiRemove(['access_token', 'refresh_token']);
     setAuthToken(null);
     setUser(null); setToken(null);
   };

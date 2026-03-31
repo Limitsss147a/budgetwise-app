@@ -20,6 +20,7 @@ expo-env.d.ts
 
 # Metro
 .metro-health-check*
+.metro-cache/
 
 # debug
 npm-debug.*
@@ -31,7 +32,14 @@ yarn-error.*
 *.pem
 
 # local env files
+.env
 .env*.local
+
+# Android build artifacts
+android/build/
+android/app/build/
+android/.gradle/
+android/local.properties
 
 # typescript
 *.tsbuildinfo

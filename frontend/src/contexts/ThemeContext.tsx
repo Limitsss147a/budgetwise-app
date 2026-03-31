@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import SafeStorage from '../utils/storage';
 import { themes, ThemeColors } from '../constants/colors';
 
 interface ThemeContextType {
@@ -17,17 +17,17 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState('light');
 
   useEffect(() => {
-    AsyncStorage.getItem('theme').then(t => { if (t && themes[t]) setTheme(t); });
+    SafeStorage.getItem('theme').then(t => { if (t && themes[t]) setTheme(t); }).catch(() => {});
   }, []);
 
   const toggleTheme = () => {
     const next = theme === 'light' ? 'dark' : 'light';
     setTheme(next);
-    AsyncStorage.setItem('theme', next);
+    SafeStorage.setItem('theme', next);
   };
 
   const setThemeMode = (mode: string) => {
-    if (themes[mode]) { setTheme(mode); AsyncStorage.setItem('theme', mode); }
+    if (themes[mode]) { setTheme(mode); SafeStorage.setItem('theme', mode); }
   };
 
   return (

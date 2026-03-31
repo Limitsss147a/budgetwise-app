@@ -2,6 +2,9 @@
 
 buildscript {
   repositories {
+    maven { url 'http://maven.aliyun.com/repository/public/'; allowInsecureProtocol true }
+    maven { url 'http://maven.aliyun.com/repository/google/'; allowInsecureProtocol true }
+    maven { url 'http://maven.aliyun.com/repository/gradle-plugin/'; allowInsecureProtocol true }
     maven { url 'http://dl.google.com/dl/android/maven2'; allowInsecureProtocol true }
     maven { url 'http://repo.maven.apache.org/maven2'; allowInsecureProtocol true }
   }
@@ -14,6 +17,9 @@ buildscript {
 
 allprojects {
   repositories {
+    maven { url 'http://maven.aliyun.com/repository/public/'; allowInsecureProtocol true }
+    maven { url 'http://maven.aliyun.com/repository/google/'; allowInsecureProtocol true }
+    maven { url 'http://maven.aliyun.com/repository/gradle-plugin/'; allowInsecureProtocol true }
     maven { url 'http://dl.google.com/dl/android/maven2'; allowInsecureProtocol true }
     maven { url 'http://repo.maven.apache.org/maven2'; allowInsecureProtocol true }
     maven { url 'http://jitpack.io'; allowInsecureProtocol true }

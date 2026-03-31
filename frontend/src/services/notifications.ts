@@ -1,16 +1,33 @@
-import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
 import { api } from '../utils/api';
 
-// Configure notification handler
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
+let Notifications: any = null;
+export let notificationsAvailable = false;
+
+// Safely load expo-notifications
+try {
+  Notifications = require('expo-notifications');
+  notificationsAvailable = true;
+} catch {
+  console.warn('[Notifications] expo-notifications native module not available');
+}
+
+// Configure notification handler (only if available)
+if (notificationsAvailable && Notifications) {
+  try {
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+      }),
+    });
+  } catch (e) {
+    console.warn('[Notifications] Failed to set notification handler:', e);
+    notificationsAvailable = false;
+  }
+}
 
 const DAY_NAMES = ['', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
 
@@ -20,7 +37,7 @@ export function getDayName(day: number): string {
 
 // Request notification permissions
 export async function requestNotificationPermissions(): Promise<boolean> {
-  if (Platform.OS === 'web') {
+  if (Platform.OS === 'web' || !notificationsAvailable || !Notifications) {
     return false;
   }
 
@@ -29,32 +46,37 @@ export async function requestNotificationPermissions(): Promise<boolean> {
     return false;
   }
 
-  const { status: existingStatus } = await Notifications.getPermissionsAsync();
-  let finalStatus = existingStatus;
+  try {
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    let finalStatus = existingStatus;
 
-  if (existingStatus !== 'granted') {
-    const { status } = await Notifications.requestPermissionsAsync();
-    finalStatus = status;
-  }
+    if (existingStatus !== 'granted') {
+      const { status } = await Notifications.requestPermissionsAsync();
+      finalStatus = status;
+    }
 
-  if (finalStatus !== 'granted') {
+    if (finalStatus !== 'granted') {
+      return false;
+    }
+
+    // Register push token with backend
+    try {
+      const tokenData = await Notifications.getExpoPushTokenAsync();
+      await api.registerPushToken(tokenData.data);
+    } catch (e) {
+      console.log('Failed to get push token:', e);
+    }
+
+    return true;
+  } catch (e) {
+    console.warn('[Notifications] requestPermissions failed:', e);
     return false;
   }
-
-  // Register push token with backend
-  try {
-    const tokenData = await Notifications.getExpoPushTokenAsync();
-    await api.registerPushToken(tokenData.data);
-  } catch (e) {
-    console.log('Failed to get push token:', e);
-  }
-
-  return true;
 }
 
 // Schedule weekly report notification
 export async function scheduleWeeklyReport(day: number, hour: number): Promise<string | null> {
-  if (Platform.OS === 'web') return null;
+  if (Platform.OS === 'web' || !notificationsAvailable || !Notifications) return null;
 
   // Cancel existing weekly report notifications
   await cancelWeeklyReport();
@@ -95,7 +117,7 @@ export async function scheduleWeeklyReport(day: number, hour: number): Promise<s
 
 // Cancel all weekly report notifications
 export async function cancelWeeklyReport(): Promise<void> {
-  if (Platform.OS === 'web') return;
+  if (Platform.OS === 'web' || !notificationsAvailable || !Notifications) return;
 
   try {
     const scheduled = await Notifications.getAllScheduledNotificationsAsync();
@@ -111,7 +133,7 @@ export async function cancelWeeklyReport(): Promise<void> {
 
 // Send a test notification immediately
 export async function sendTestNotification(): Promise<void> {
-  if (Platform.OS === 'web') return;
+  if (Platform.OS === 'web' || !notificationsAvailable || !Notifications) return;
 
   try {
     let reportBody = 'Ini adalah contoh notifikasi laporan mingguan';
@@ -139,10 +161,10 @@ export async function sendTestNotification(): Promise<void> {
 
 // Get count of scheduled notifications
 export async function getScheduledCount(): Promise<number> {
-  if (Platform.OS === 'web') return 0;
+  if (Platform.OS === 'web' || !notificationsAvailable || !Notifications) return 0;
   try {
     const scheduled = await Notifications.getAllScheduledNotificationsAsync();
-    return scheduled.filter(n => n.content.data?.type === 'weekly_report').length;
+    return scheduled.filter((n: any) => n.content.data?.type === 'weekly_report').length;
   } catch {
     return 0;
   }

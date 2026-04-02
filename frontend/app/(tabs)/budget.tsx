@@ -56,6 +56,12 @@ export default function BudgetScreen() {
     ]);
   };
 
+  const handleEditBudget = (b: Budget) => {
+    setSelCat(b.category_id);
+    setBudgetAmt(b.amount.toString());
+    setShowModal(true);
+  };
+
   const getProgressColor = (pct: number) => {
     if (pct >= 100) return colors.expense;
     if (pct >= 80) return colors.accent;
@@ -87,7 +93,7 @@ export default function BudgetScreen() {
         </View>
 
         {budgets.length > 0 && (
-          <View style={[st.totalCard, { backgroundColor: colors.brand }]}>
+          <View style={[st.totalCard, { backgroundColor: '#064E3B' }]}>
             <Text style={[st.totalLabel, { fontFamily: fonts.regular }]}>Total Anggaran</Text>
             <Text style={[st.totalVal, { fontFamily: fonts.bold }]}>{formatRupiah(totalBudget)}</Text>
             <View style={st.progressBg}>
@@ -118,9 +124,14 @@ export default function BudgetScreen() {
                     <Text style={[st.catName, { color: colors.text, fontFamily: fonts.medium }]}>{cat?.name || 'Lainnya'}</Text>
                     <Text style={[st.budgetRange, { color: colors.textTertiary, fontFamily: fonts.regular }]}>{formatRupiah(spent)} / {formatRupiah(budget.amount)}</Text>
                   </View>
-                  <TouchableOpacity testID={`delete-budget-${budget.id}`} onPress={() => handleDeleteBudget(budget)}>
-                    <Ionicons name="close-circle-outline" size={20} color={colors.expense} />
-                  </TouchableOpacity>
+                  <View style={{ flexDirection: 'row', gap: 14 }}>
+                    <TouchableOpacity testID={`edit-budget-${budget.id}`} onPress={() => handleEditBudget(budget)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                      <Ionicons name="create-outline" size={20} color={colors.brand} />
+                    </TouchableOpacity>
+                    <TouchableOpacity testID={`delete-budget-${budget.id}`} onPress={() => handleDeleteBudget(budget)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                      <Ionicons name="close-circle-outline" size={20} color={colors.expense} />
+                    </TouchableOpacity>
+                  </View>
                 </View>
                 <View style={[st.progressBgCard, { backgroundColor: colors.bgSecondary }]}>
                   <View style={[st.progressFill, { width: `${Math.min(100, pct)}%`, backgroundColor: getProgressColor(pct) }]} />

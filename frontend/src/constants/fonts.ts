@@ -1,7 +1,7 @@
 // Font families for the app
 export const fonts = {
-  regular: 'Poppins_400Regular',
-  medium: 'Poppins_500Medium',
-  semiBold: 'Poppins_600SemiBold',
-  bold: 'Poppins_700Bold',
+  regular: 'Inter_400Regular',
+  medium: 'Inter_500Medium',
+  semiBold: 'Inter_600SemiBold',
+  bold: 'Inter_700Bold',
 };

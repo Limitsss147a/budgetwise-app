@@ -4,7 +4,7 @@ import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Platform }
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
-import { useFonts, Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, Poppins_700Bold } from '@expo-google-fonts/poppins';
+import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
 import { ThemeProvider, useTheme } from '../src/contexts/ThemeContext';
@@ -40,14 +40,14 @@ function PinLock({ onUnlock }: { onUnlock: () => void }) {
     <SafeAreaView style={[ps.container, { backgroundColor: colors.bg }]}>
       <View style={ps.content}>
         <View style={[ps.iconCircle, { backgroundColor: colors.brand }]}><Text style={ps.lockIcon}>🔒</Text></View>
-        <Text style={[ps.title, { color: colors.text, fontFamily: 'Poppins_700Bold' }]}>Masukkan PIN</Text>
-        <Text style={[ps.subtitle, { color: colors.textTertiary, fontFamily: 'Poppins_400Regular' }]}>Masukkan 6 digit PIN Anda</Text>
+        <Text style={[ps.title, { color: colors.text, fontFamily: 'Inter_700Bold' }]}>Masukkan PIN</Text>
+        <Text style={[ps.subtitle, { color: colors.textTertiary, fontFamily: 'Inter_400Regular' }]}>Masukkan 6 digit PIN Anda</Text>
         <View style={ps.dotsRow}>{[0,1,2,3,4,5].map(i => <View key={i} style={[ps.dot, { borderColor: colors.brand }, i < pin.length && { backgroundColor: colors.brand }]} />)}</View>
-        {error ? <Text style={[ps.error, { fontFamily: 'Poppins_500Medium' }]}>{error}</Text> : <View style={{ height: 20 }} />}
+        {error ? <Text style={[ps.error, { fontFamily: 'Inter_500Medium' }]}>{error}</Text> : <View style={{ height: 20 }} />}
         <View style={ps.keypad}>{keys.map((k, i) => (
           <TouchableOpacity key={i} testID={`pin-key-${k||'empty'}`} style={[ps.key, { backgroundColor: colors.bgCard }, !k && { backgroundColor: 'transparent' }]}
             onPress={() => { if (k === 'del') { setPin(p => p.slice(0,-1)); setError(''); } else if (k) handleDot(k); }} disabled={!k} activeOpacity={0.6}>
-            <Text style={[ps.keyText, { color: colors.text, fontFamily: 'Poppins_600SemiBold' }]}>{k === 'del' ? '⌫' : k}</Text>
+            <Text style={[ps.keyText, { color: colors.text, fontFamily: 'Inter_600SemiBold' }]}>{k === 'del' ? '⌫' : k}</Text>
           </TouchableOpacity>
         ))}</View>
       </View>
@@ -125,10 +125,10 @@ function AuthGate() {
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
-    Poppins_400Regular,
-    Poppins_500Medium,
-    Poppins_600SemiBold,
-    Poppins_700Bold,
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
     ...Ionicons.font,
   });
 

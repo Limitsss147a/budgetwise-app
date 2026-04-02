@@ -62,7 +62,7 @@ export default function Dashboard() {
         </View>
 
         {/* Kartu Saldo */}
-        <View style={[s.balanceCard, { backgroundColor: colors.brand }]} testID="balance-card">
+        <View style={[s.balanceCard, { backgroundColor: '#064E3B' }]} testID="balance-card">
           <Text style={[s.balLabel, { fontFamily: fonts.regular }]}>Saldo Total</Text>
           <Text style={[s.balAmount, { fontFamily: fonts.bold }]}>{formatRupiah(summary?.balance || 0)}</Text>
           <View style={s.balRow}>

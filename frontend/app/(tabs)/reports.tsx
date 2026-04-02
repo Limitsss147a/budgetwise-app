@@ -174,10 +174,7 @@ export default function Reports() {
           </View>
         )}
 
-        <TouchableOpacity testID="export-csv-btn" style={[st.exportBtn, { backgroundColor: colors.brand }]} onPress={handleExportCsv} activeOpacity={0.8}>
-          <Ionicons name="download-outline" size={20} color="#FFF" />
-          <Text style={[st.exportBtnText, { fontFamily: fonts.semiBold }]}>Export CSV</Text>
-        </TouchableOpacity>
+
         <View style={{ height: 30 }} />
       </ScrollView>
     </SafeAreaView>
@@ -218,6 +215,5 @@ const st = StyleSheet.create({
   statItem: { width: '46%' as any, borderRadius: 12, padding: 14, gap: 4 },
   statLabel: { fontSize: 12 },
   statVal: { fontSize: 16 },
-  exportBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: 14, paddingVertical: 14, gap: 8 },
-  exportBtnText: { fontSize: 15, color: '#FFF' },
+
 });

@@ -18,17 +18,17 @@ export interface ThemeColors {
 
 export const themes: Record<string, ThemeColors> = {
   light: {
-    bg: '#F9F9F6', bgCard: '#FFFFFF', bgSecondary: '#F4EFEB',
-    text: '#1A4D2E', textSecondary: '#4A4A4A', textTertiary: '#7D7D7D', textInverse: '#FFFFFF',
-    brand: '#1A4D2E', accent: '#E86A33', income: '#3A6E4B', expense: '#D34A3E',
-    border: '#F0EBE1', tabBg: '#FFFFFF',
-    chart: ['#1A4D2E', '#7D8F69', '#C2A878', '#E86A33', '#4A8B9A', '#9DB0A3', '#D9C7B6', '#F1A075'],
+    bg: '#F3F4F6', bgCard: '#FFFFFF', bgSecondary: '#E5E7EB',
+    text: '#111827', textSecondary: '#4B5563', textTertiary: '#9CA3AF', textInverse: '#FFFFFF',
+    brand: '#10B981', accent: '#10B981', income: '#10B981', expense: '#EF4444',
+    border: '#E5E7EB', tabBg: '#FFFFFF',
+    chart: ['#10B981', '#3B82F6', '#8B5CF6', '#F59E0B', '#EF4444', '#14B8A6', '#6366F1', '#EC4899'],
   },
   dark: {
-    bg: '#0D1117', bgCard: '#161B22', bgSecondary: '#21262D',
-    text: '#E6EDF3', textSecondary: '#8B949E', textTertiary: '#6E7681', textInverse: '#0D1117',
-    brand: '#58A67E', accent: '#F0883E', income: '#56D364', expense: '#F85149',
-    border: '#30363D', tabBg: '#161B22',
-    chart: ['#58A67E', '#7EE787', '#F0883E', '#D2A8FF', '#79C0FF', '#FFA657', '#FF7B72', '#A5D6FF'],
+    bg: '#121212', bgCard: '#1E1E1E', bgSecondary: '#2D2D2D',
+    text: '#F9FAFB', textSecondary: '#D1D5DB', textTertiary: '#6B7280', textInverse: '#121212',
+    brand: '#10B981', accent: '#10B981', income: '#34D399', expense: '#F87171',
+    border: '#333333', tabBg: '#1E1E1E',
+    chart: ['#34D399', '#60A5FA', '#A78BFA', '#FBBF24', '#F87171', '#2DD4BF', '#818CF8', '#F472B6'],
   },
 };

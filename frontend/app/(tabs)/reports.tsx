@@ -36,7 +36,17 @@ export default function Reports() {
 
   const periods = [{ v: 3, l: '3 Bln' }, { v: 6, l: '6 Bln' }, { v: 12, l: '1 Thn' }];
   const pieData = breakdown.map(i => ({ value: i.total, color: i.category_color }));
-  const incomeData = trend.map(t => ({ value: t.income }));
+  const getShortMonth = (yyyymm: string) => {
+    if (!yyyymm) return '';
+    const m = parseInt(yyyymm.split('-')[1], 10);
+    const names = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agt', 'Sep', 'Okt', 'Nov', 'Des'];
+    return names[m - 1] || '';
+  };
+  const incomeData = trend.map(t => ({ 
+    value: t.income, 
+    label: getShortMonth(t.month), 
+    labelTextStyle: { color: colors.textTertiary, fontSize: 10, fontFamily: fonts.regular } 
+  }));
   const expenseData = trend.map(t => ({ value: t.expense }));
 
   const handleExportCsv = () => {
@@ -100,9 +110,14 @@ export default function Reports() {
                 curved thickness={2}
                 hideDataPoints={false} dataPointsColor1={colors.income} dataPointsColor2={colors.expense}
                 dataPointsRadius={3}
-                yAxisThickness={0} xAxisThickness={1} xAxisColor={colors.border}
-                hideRules spacing={50} noOfSections={4} hideYAxisText
-                width={260}
+                yAxisThickness={1} yAxisColor={colors.border} xAxisThickness={1} xAxisColor={colors.border}
+                hideRules spacing={65} noOfSections={4} 
+                yAxisTextStyle={{ color: colors.textTertiary, fontSize: 10, fontFamily: fonts.regular }}
+                formatYLabel={(val: string) => {
+                  const v = Number(val);
+                  return v >= 1000000 ? (v / 1000000).toFixed(0) + 'M' : v >= 1000 ? (v / 1000).toFixed(0) + 'K' : String(v);
+                }}
+                width={280}
               />
               <View style={st.lineLegend}>
                 <View style={st.lineLegendItem}><View style={[st.lineLegendDot, { backgroundColor: colors.income }]} /><Text style={[st.lineLegendText, { color: colors.textSecondary, fontFamily: fonts.regular }]}>Pemasukan</Text></View>

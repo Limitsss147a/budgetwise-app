@@ -160,7 +160,7 @@ export default function SettingsScreen() {
                 <Ionicons name="person" size={28} color={colors.textInverse} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[st.emailText, { color: colors.textTertiary, fontFamily: fonts.regular }]}>{user?.email || ''}</Text>
+                <Text style={[st.emailText, { color: theme === 'dark' ? '#D1D5DB' : colors.textSecondary, fontFamily: fonts.regular }]}>{user?.email || ''}</Text>
                 <TextInput testID="profile-name-input" style={[st.nameInput, { color: colors.text, backgroundColor: colors.bgSecondary, fontFamily: fonts.medium }]} placeholder="Nama Anda"
                   value={profileName} onChangeText={setProfileName} placeholderTextColor={colors.textTertiary} />
               </View>
@@ -336,7 +336,7 @@ const st = StyleSheet.create({
   profileRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   avatar: { width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center' },
   emailText: { fontSize: 12, marginBottom: 4 },
-  nameInput: { fontSize: 15, padding: 8, borderRadius: 8 },
+  nameInput: { flex: 1, fontSize: 15, padding: 8, borderRadius: 8 },
   saveNameBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 },
   saveNameText: { fontSize: 13, color: '#FFF' },
   settingRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 4 },
@@ -351,11 +351,11 @@ const st = StyleSheet.create({
   dangerBtn: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8, alignSelf: 'flex-start' },
   dangerBtnText: { fontSize: 13, color: '#FFF' },
   cancelText: { fontSize: 13, paddingVertical: 10 },
-  logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 16, borderRadius: 14, borderWidth: 1.5, marginTop: 4 },
+  logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 16, borderRadius: 8, borderWidth: 1.5, marginTop: 4 },
   logoutText: { fontSize: 16 },
   subLabel: { fontSize: 12 },
-  dayPill: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, marginRight: 8 },
+  dayPill: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, borderWidth: 1, marginRight: 8 },
   dayText: { fontSize: 12 },
-  testNotifBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, borderRadius: 10, marginTop: 4 },
+  testNotifBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, borderRadius: 8, marginTop: 4 },
   testNotifText: { fontSize: 13 },
 });

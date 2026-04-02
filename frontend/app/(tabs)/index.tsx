@@ -83,11 +83,6 @@ export default function Dashboard() {
           </View>
         </View>
 
-        {/* Tombol Tambah */}
-        <TouchableOpacity testID="add-transaction-button" style={[s.addBtn, { backgroundColor: colors.accent }]} onPress={() => router.push('/add-transaction')} activeOpacity={0.8}>
-          <Ionicons name="add-circle" size={22} color="#FFF" />
-          <Text style={[s.addBtnText, { fontFamily: fonts.semiBold }]}>Tambah Transaksi</Text>
-        </TouchableOpacity>
 
         {/* Grafik Pengeluaran */}
         {pieData.length > 0 && (
@@ -182,8 +177,7 @@ const s = StyleSheet.create({
   balItem: { flexDirection: 'row', alignItems: 'center' },
   balItemLabel: { fontSize: 11, color: 'rgba(255,255,255,0.55)' },
   balItemVal: { fontSize: 14 },
-  addBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: 14, paddingVertical: 14, marginBottom: 20, gap: 8 },
-  addBtnText: { fontSize: 15, color: '#FFF' },
+
   card: { borderRadius: 16, padding: 20, marginBottom: 16, borderWidth: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 16, elevation: 2 },
   cardHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   cardTitle: { fontSize: 17, marginBottom: 12 },

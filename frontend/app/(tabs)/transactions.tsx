@@ -1,8 +1,10 @@
 import { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert, RefreshControl, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
+import { Swipeable } from 'react-native-gesture-handler';
+import * as Haptics from 'expo-haptics';
 import { api } from '../../src/utils/api';
 import { formatRupiah, formatDate, getCurrentMonth, formatMonthYear, getMonthOffset } from '../../src/utils/format';
 import { useTheme } from '../../src/contexts/ThemeContext';
@@ -54,25 +56,37 @@ export default function Transactions() {
 
   const renderItem = ({ item: tx }: { item: Transaction }) => {
     const cat = catMap(tx.category_id);
-    return (
-      <TouchableOpacity testID={`tx-item-${tx.id}`} style={[st.txRow, { borderBottomColor: colors.border }]} activeOpacity={0.7}
-        onPress={() => router.push(`/add-transaction?id=${tx.id}` as any)}>
-        <View style={[st.txIcon, { backgroundColor: (cat?.color || '#7D7D7D') + '18' }]}>
-          <Ionicons name={(cat?.icon || 'ellipsis-horizontal') as any} size={18} color={cat?.color || '#7D7D7D'} />
-        </View>
-        <View style={st.txInfo}>
-          <Text style={[st.txName, { color: colors.text, fontFamily: fonts.medium }]} numberOfLines={1}>{cat?.name || 'Lainnya'}</Text>
-          <Text style={[st.txDesc, { color: colors.textTertiary, fontFamily: fonts.regular }]} numberOfLines={1}>{tx.description || formatDate(tx.date)}</Text>
-        </View>
-        <View style={st.txRight}>
-          <Text style={[st.txAmt, { color: tx.type === 'income' ? colors.income : colors.expense, fontFamily: fonts.bold }]}>
-            {tx.type === 'income' ? '+' : '-'}{formatRupiah(tx.amount)}
-          </Text>
-          <TouchableOpacity testID={`delete-tx-${tx.id}`} onPress={() => handleDelete(tx)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <Ionicons name="trash-outline" size={16} color={colors.expense} />
-          </TouchableOpacity>
-        </View>
+    const renderRightActions = () => (
+      <TouchableOpacity 
+        style={st.deleteAction} 
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          handleDelete(tx);
+        }}
+        activeOpacity={0.8}
+      >
+        <Ionicons name="trash" size={24} color="#FFF" />
       </TouchableOpacity>
+    );
+
+    return (
+      <Swipeable renderRightActions={renderRightActions} overshootRight={false}>
+        <TouchableOpacity testID={`tx-item-${tx.id}`} style={[st.txRow, { borderBottomColor: colors.border, backgroundColor: colors.bg }]} activeOpacity={1}
+          onPress={() => router.push(`/add-transaction?id=${tx.id}` as any)}>
+          <View style={[st.txIcon, { backgroundColor: (cat?.color || '#7D7D7D') + '18' }]}>
+            <Ionicons name={(cat?.icon || 'ellipsis-horizontal') as any} size={18} color={cat?.color || '#7D7D7D'} />
+          </View>
+          <View style={st.txInfo}>
+            <Text style={[st.txName, { color: colors.text, fontFamily: fonts.medium }]} numberOfLines={1}>{cat?.name || 'Lainnya'}</Text>
+            <Text style={[st.txDesc, { color: colors.textTertiary, fontFamily: fonts.regular }]} numberOfLines={1}>{tx.description || formatDate(tx.date)}</Text>
+          </View>
+          <View style={st.txRight}>
+            <Text style={[st.txAmt, { color: tx.type === 'income' ? colors.income : colors.expense, fontFamily: fonts.bold }]}>
+              {tx.type === 'income' ? '+' : '-'}{formatRupiah(tx.amount)}
+            </Text>
+          </View>
+        </TouchableOpacity>
+      </Swipeable>
     );
   };
 
@@ -147,8 +161,9 @@ const st = StyleSheet.create({
   txInfo: { flex: 1 },
   txName: { fontSize: 14 },
   txDesc: { fontSize: 12, marginTop: 2 },
-  txRight: { alignItems: 'flex-end', gap: 6 },
+  txRight: { alignItems: 'flex-end', justifyContent: 'center', gap: 6 },
   txAmt: { fontSize: 14 },
+  deleteAction: { width: 75, justifyContent: 'center', alignItems: 'center', backgroundColor: '#EF4444' },
   empty: { alignItems: 'center', paddingTop: 60 },
   emptyTitle: { fontSize: 16, marginTop: 16 },
   emptySub: { fontSize: 13, marginTop: 4 },

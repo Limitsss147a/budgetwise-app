@@ -11,6 +11,7 @@ import { StockPortfolioTable } from '../../src/components/ui/StockPortfolioTable
 import { formatPercentage } from '../../src/utils/format';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
+import { LoadingScreen } from '../../src/components/ui/LoadingScreen';
 
 interface Holding {
   ticker: string;
@@ -150,15 +151,7 @@ export default function PortfolioScreen() {
     );
   };
 
-  if (loading) {
-    return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={colors.brand} />
-        </View>
-      </SafeAreaView>
-    );
-  }
+  if (loading) return <LoadingScreen />;
 
   const renderHoldingsTable = () => {
     const stocks = data?.holdings.map(h => ({

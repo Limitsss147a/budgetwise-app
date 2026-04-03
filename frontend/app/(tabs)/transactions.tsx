@@ -11,6 +11,9 @@ import { useTheme } from '../../src/contexts/ThemeContext';
 import { fonts } from '../../src/constants/fonts';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
+import { DonutChart } from '../../src/components/ui/DonutChart';
+import { Card, CardTitle } from '../../src/components/ui/Card';
+import { LoadingScreen } from '../../src/components/ui/LoadingScreen';
 import type { Transaction, Category } from '../../src/types';
 
 export default function Transactions() {
@@ -95,6 +98,7 @@ export default function Transactions() {
       </Swipeable>
     );
   };
+  if (loading) return <LoadingScreen />;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
@@ -135,10 +139,6 @@ export default function Transactions() {
             </TouchableOpacity>
           ))}
         </View>
-
-        {loading ? (
-          <View style={st.center}><ActivityIndicator size="large" color={colors.brand} /></View>
-        ) : (
           <FlatList
             data={transactions}
             keyExtractor={item => item.id}
@@ -157,7 +157,6 @@ export default function Transactions() {
               </View>
             }
           />
-        )}
       </SafeAreaView>
     </View>
   );

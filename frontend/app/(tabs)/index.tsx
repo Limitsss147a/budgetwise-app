@@ -14,6 +14,7 @@ import { BlurView } from 'expo-blur';
 import type { Summary, CategoryBreakdown, DailyTrend, Transaction, Category } from '../../src/types';
 import { Card, CardTitle } from '../../src/components/ui/Card';
 import { DonutChart } from '../../src/components/ui/DonutChart';
+import { LoadingScreen } from '../../src/components/ui/LoadingScreen';
 
 export default function Dashboard() {
   const router = useRouter();
@@ -45,9 +46,7 @@ export default function Dashboard() {
 
   const catMap = useCallback((id: string) => categories.find(c => c.id === id), [categories]);
 
-  if (loading) {
-    return <SafeAreaView style={[s.container, { backgroundColor: colors.bg }]}><View style={s.center}><ActivityIndicator size="large" color={colors.brand} /></View></SafeAreaView>;
-  }
+  if (loading) return <LoadingScreen />;
 
   const pieData = breakdown.map(item => ({ value: item.total, color: item.category_color }));
   const barData = dailyTrend.map(day => ({

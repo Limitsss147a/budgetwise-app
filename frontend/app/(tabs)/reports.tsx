@@ -14,6 +14,7 @@ import { Platform } from 'react-native';
 import type { CategoryBreakdown, MonthlyTrend } from '../../src/types';
 import { DonutChart } from '../../src/components/ui/DonutChart';
 import { Card, CardTitle } from '../../src/components/ui/Card';
+import { LoadingScreen } from '../../src/components/ui/LoadingScreen';
 
 export default function Reports() {
   const { colors, theme } = useTheme();
@@ -59,9 +60,7 @@ export default function Reports() {
     Linking.openURL(url);
   };
 
-  if (loading) {
-    return <SafeAreaView style={[st.container, { backgroundColor: colors.bg }]}><View style={st.center}><ActivityIndicator size="large" color={colors.brand} /></View></SafeAreaView>;
-  }
+  if (loading) return <LoadingScreen />;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>

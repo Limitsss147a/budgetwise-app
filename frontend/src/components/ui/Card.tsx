@@ -3,6 +3,7 @@ import * as React from "react";
 import { View, Text, StyleSheet, ViewStyle, TextStyle } from "react-native";
 import { cn } from "../../lib/utils";
 import { useTheme } from "../../contexts/ThemeContext";
+import { fonts } from "../../constants/fonts";
 
 const Card = React.forwardRef<View, { style?: ViewStyle; children: React.ReactNode }>(
   ({ style, children, ...props }, ref) => {
@@ -37,7 +38,7 @@ Card.displayName = "Card";
 const CardTitle = ({ style, children }: { style?: TextStyle; children: React.ReactNode }) => {
   const { colors } = useTheme();
   return (
-    <Text style={cn({ fontSize: 20, textAlign: 'center', color: colors.text, marginBottom: 20 }, style)}>
+    <Text style={cn({ fontSize: 18, textAlign: 'left', color: colors.text, marginBottom: 20, fontFamily: fonts.semiBold }, style)}>
       {children}
     </Text>
   );

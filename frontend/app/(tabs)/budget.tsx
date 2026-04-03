@@ -11,6 +11,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { Platform } from 'react-native';
 import type { Budget, Category, CategoryBreakdown } from '../../src/types';
+import { LoadingScreen } from '../../src/components/ui/LoadingScreen';
 
 export default function BudgetScreen() {
   const { colors, theme } = useTheme();
@@ -71,9 +72,7 @@ export default function BudgetScreen() {
     return colors.income;
   };
 
-  if (loading) {
-    return <SafeAreaView style={[st.container, { backgroundColor: colors.bg }]}><View style={st.center}><ActivityIndicator size="large" color={colors.brand} /></View></SafeAreaView>;
-  }
+  if (loading) return <LoadingScreen />;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
@@ -216,7 +215,7 @@ export default function BudgetScreen() {
 const st = StyleSheet.create({
   container: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  scroll: { padding: 20, paddingBottom: 40 },
+  scroll: { padding: 20, paddingBottom: 150 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
   screenTitle: { fontSize: 24 },
   addBtn: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },

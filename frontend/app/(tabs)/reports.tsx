@@ -12,6 +12,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { Platform } from 'react-native';
 import type { CategoryBreakdown, MonthlyTrend } from '../../src/types';
+import { DonutChart } from '../../src/components/ui/DonutChart';
+import { Card, CardTitle } from '../../src/components/ui/Card';
 
 export default function Reports() {
   const { colors, theme } = useTheme();
@@ -159,26 +161,36 @@ export default function Reports() {
           </View>
 
           {pieData.length > 0 && (
-            <View style={st.glassWrapperLarge}>
-              <BlurView intensity={theme === 'dark' ? 20 : 60} tint={theme === 'dark' ? 'dark' : 'light'} style={st.glassCardLarge}>
-                <View style={[st.cardInner, { borderColor: colors.border }]}>
-                  <Text style={[st.cardTitle, { color: colors.text, fontFamily: fonts.semiBold }]}>Distribusi Pengeluaran</Text>
-                  <View style={st.chartCenter}>
-                    <PieChart data={pieData} donut innerRadius={45} radius={75} innerCircleColor="transparent" />
+            <Card style={{ marginBottom: 16 }}>
+              <CardTitle>Distribusi Pengeluaran</CardTitle>
+              <View style={{ alignItems: 'center', marginBottom: 24 }}>
+                <DonutChart
+                  data={breakdown.map(item => ({
+                    value: item.total,
+                    color: item.category_color || colors.brand,
+                    label: item.category_name,
+                  }))}
+                  size={240}
+                  strokeWidth={32}
+                  centerContent={
+                    <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                      <Text style={{ fontSize: 11, color: colors.textTertiary, fontFamily: fonts.regular, marginBottom: 2 }}>Total Pengeluaran</Text>
+                      <Text style={{ fontSize: 18, color: colors.text, fontFamily: fonts.bold }}>{formatRupiah(summary?.month_expense || 0)}</Text>
+                    </View>
+                  }
+                />
+              </View>
+              <View style={{ height: 1, backgroundColor: colors.border, marginVertical: 20 }} />
+              <View style={st.breakdownList}>
+                {breakdown.map(item => (
+                  <View key={item.category_id} style={st.breakdownRow}>
+                    <View style={[st.bDot, { backgroundColor: item.category_color }]} />
+                    <Text style={[st.bName, { color: colors.textSecondary, fontFamily: fonts.regular }]} numberOfLines={1}>{item.category_name}</Text>
+                    <Text style={[st.bAmt, { color: colors.text, fontFamily: fonts.semiBold }]}>{formatRupiah(item.total)}</Text>
                   </View>
-                  <View style={st.breakdownList}>
-                    {breakdown.map(item => (
-                      <View key={item.category_id} style={st.breakdownRow}>
-                        <View style={[st.bDot, { backgroundColor: item.category_color }]} />
-                        <Text style={[st.bName, { color: colors.textSecondary, fontFamily: fonts.regular }]} numberOfLines={1}>{item.category_name}</Text>
-                        <Text style={[st.bAmt, { color: colors.text, fontFamily: fonts.semiBold }]}>{formatRupiah(item.total)}</Text>
-                        <Text style={[st.bPct, { color: colors.textTertiary, fontFamily: fonts.regular }]}>{item.percentage}%</Text>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-              </BlurView>
-            </View>
+                ))}
+              </View>
+            </Card>
           )}
 
           {stats && (

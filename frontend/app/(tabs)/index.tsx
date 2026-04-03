@@ -12,6 +12,8 @@ import { fonts } from '../../src/constants/fonts';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import type { Summary, CategoryBreakdown, DailyTrend, Transaction, Category } from '../../src/types';
+import { Card, CardTitle } from '../../src/components/ui/Card';
+import { DonutChart } from '../../src/components/ui/DonutChart';
 
 export default function Dashboard() {
   const router = useRouter();
@@ -93,9 +95,30 @@ export default function Dashboard() {
                   {formatRupiah(summary?.balance || 0)}
                 </Text>
                 <View style={s.balLine} />
+                <View style={s.balGrid}>
+                  <View style={s.balItem}>
+                    <View style={[s.balIcon, { backgroundColor: 'rgba(74, 222, 128, 0.2)' }]}>
+                      <Ionicons name="arrow-up" size={14} color="#4ADE80" />
+                    </View>
+                    <View>
+                      <Text style={[s.balItemLabel, { color: 'rgba(255,255,255,0.7)', fontFamily: fonts.regular }]}>Masuk</Text>
+                      <Text style={[s.balItemVal, { color: '#FFF', fontFamily: fonts.semiBold }]}>{formatRupiah(summary?.month_income || 0)}</Text>
+                    </View>
+                  </View>
+                  <View style={s.balItem}>
+                    <View style={[s.balIcon, { backgroundColor: 'rgba(251, 113, 133, 0.2)' }]}>
+                      <Ionicons name="arrow-down" size={14} color="#FB7185" />
+                    </View>
+                    <View>
+                      <Text style={[s.balItemLabel, { color: 'rgba(255,255,255,0.7)', fontFamily: fonts.regular }]}>Keluar</Text>
+                      <Text style={[s.balItemVal, { color: '#FFF', fontFamily: fonts.semiBold }]}>{formatRupiah(summary?.month_expense || 0)}</Text>
+                    </View>
+                  </View>
+                </View>
+                <View style={s.balLine} />
                 <View style={s.balBottom}>
                   <View>
-                    <Text style={[s.balSub, { color: 'rgba(255,255,255,0.7)', fontFamily: fonts.regular }]}>Bulan Ini</Text>
+                    <Text style={[s.balSub, { color: 'rgba(255,255,255,0.7)', fontFamily: fonts.regular }]}>Selisih Bulan Ini</Text>
                     <Text style={[s.balChange, { color: '#FFF', fontFamily: fonts.semiBold }]}>
                       {(summary?.month_income || 0) - (summary?.month_expense || 0) >= 0 ? '+' : ''}{formatRupiah((summary?.month_income || 0) - (summary?.month_expense || 0))}
                     </Text>
@@ -108,38 +131,38 @@ export default function Dashboard() {
 
           {/* Regular Cards with Glass Effect */}
           {breakdown.length > 0 && (
-            <View style={s.glassWrapperLarge}>
-              <BlurView intensity={theme === 'dark' ? 20 : 60} tint={theme === 'dark' ? 'dark' : 'light'} style={s.glassCardLarge}>
-                <View style={[s.cardInner, { borderColor: colors.border }]}>
-                  <View style={s.cardHead}>
-                    <Text style={[s.cardTitle, { color: colors.text, fontFamily: fonts.semiBold }]}>Alokasi Pengeluaran</Text>
+            <Card style={{ marginBottom: 24 }}>
+              <CardTitle>Alokasi Pengeluaran</CardTitle>
+              <View style={{ alignItems: 'center', marginBottom: 24 }}>
+                <DonutChart
+                  data={breakdown.map(item => ({
+                    value: item.total,
+                    color: item.category_color || colors.brand,
+                    label: item.category_name,
+                  }))}
+                  size={240}
+                  strokeWidth={32}
+                  centerContent={
+                    <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                      <Text style={{ fontSize: 11, color: colors.textTertiary, fontFamily: fonts.regular, marginBottom: 2 }}>Total Pengeluaran</Text>
+                      <Text style={{ fontSize: 18, color: colors.text, fontFamily: fonts.bold }}>{formatRupiah(summary?.month_expense || 0)}</Text>
+                    </View>
+                  }
+                />
+              </View>
+              
+              <View style={[s.balLine, { marginVertical: 0, marginBottom: 20, backgroundColor: colors.border }]} />
+              
+              <View style={s.legendWrap}>
+                {breakdown.map((item, idx) => (
+                  <View key={idx} style={s.legendItem}>
+                    <View style={[s.legendDot, { backgroundColor: item.category_color }]} />
+                    <Text style={[s.legendText, { color: colors.textSecondary, fontFamily: fonts.regular }]} numberOfLines={1}>{item.category_name}</Text>
+                    <Text style={[s.legendPct, { color: colors.text, fontFamily: fonts.semiBold }]}>{formatRupiah(item.total)}</Text>
                   </View>
-                  <View style={s.chartCenter}>
-                    <PieChart
-                      data={breakdown.map(item => ({
-                        value: item.total,
-                        color: item.category_color || colors.brand,
-                        text: `${item.percentage}%`,
-                      }))}
-                      donut
-                      innerRadius={45}
-                      radius={75}
-                      innerCircleColor="transparent"
-                      focusOnPress
-                    />
-                  </View>
-                  <View style={s.legendWrap}>
-                    {breakdown.map((item, idx) => (
-                      <View key={idx} style={s.legendItem}>
-                        <View style={[s.legendDot, { backgroundColor: item.category_color }]} />
-                        <Text style={[s.legendText, { color: colors.textSecondary, fontFamily: fonts.regular }]} numberOfLines={1}>{item.category_name}</Text>
-                        <Text style={[s.legendPct, { color: colors.text, fontFamily: fonts.semiBold }]}>{item.percentage}%</Text>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-              </BlurView>
-            </View>
+                ))}
+              </View>
+            </Card>
           )}
 
           {barData.some(d => d.value > 0) && (
@@ -222,7 +245,12 @@ const s = StyleSheet.create({
   blob: { position: 'absolute', width: 300, height: 300, borderRadius: 150, filter: Platform.OS === 'ios' ? 'blur(60px)' : 'none' },
   balLabel: { fontSize: 13 },
   balVal: { fontSize: 32, marginVertical: 8 },
-  balLine: { height: 1, backgroundColor: 'rgba(255,255,255,0.1)', marginVertical: 16 },
+  balLine: { height: 1, backgroundColor: 'rgba(255,255,255,0.1)', marginVertical: 12 },
+  balGrid: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  balItem: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  balIcon: { width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
+  balItemLabel: { fontSize: 11, marginBottom: 2 },
+  balItemVal: { fontSize: 14 },
   balBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   balSub: { fontSize: 11, marginBottom: 4 },
   balChange: { fontSize: 16 },

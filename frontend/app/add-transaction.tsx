@@ -68,6 +68,21 @@ export default function AddTransaction() {
     } finally { setLoading(false); }
   };
 
+  const handleDelete = async () => {
+    Alert.alert('Hapus Transaksi', 'Yakin ingin menghapus transaksi ini permanently?', [
+      { text: 'Batal', style: 'cancel' },
+      { text: 'Hapus', style: 'destructive', onPress: async () => {
+        setLoading(true);
+        try {
+          await api.deleteTransaction(id!);
+          router.back();
+        } catch (e: any) {
+          Alert.alert('Error', e.message || 'Gagal menghapus');
+        } finally { setLoading(false); }
+      }}
+    ]);
+  };
+
   if (initLoading) {
     return <SafeAreaView style={[st.container, { backgroundColor: colors.bg }]}><View style={st.center}><ActivityIndicator size="large" color={colors.brand} /></View></SafeAreaView>;
   }
@@ -134,6 +149,14 @@ export default function AddTransaction() {
               </>
             )}
           </TouchableOpacity>
+
+          {isEdit && (
+            <TouchableOpacity testID="delete-transaction-btn" style={[st.deleteBtn, { borderColor: '#FB7185' }]}
+              onPress={handleDelete} disabled={loading} activeOpacity={0.8}>
+              <Ionicons name="trash-outline" size={20} color="#FB7185" />
+              <Text style={[st.deleteBtnText, { fontFamily: fonts.semiBold, color: '#FB7185' }]}>Hapus Transaksi</Text>
+            </TouchableOpacity>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -163,4 +186,6 @@ const st = StyleSheet.create({
   saveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: 14, paddingVertical: 16, gap: 8 },
   saveBtnDisabled: { opacity: 0.6 },
   saveBtnText: { fontSize: 16, color: '#FFF' },
+  deleteBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: 14, paddingVertical: 14, gap: 8, marginTop: 16, borderWidth: 1 },
+  deleteBtnText: { fontSize: 15 },
 });

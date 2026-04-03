@@ -8,10 +8,13 @@ import { api } from '../../src/utils/api';
 import { formatRupiah, getCurrentMonth, formatMonthYear, getMonthOffset } from '../../src/utils/format';
 import { useTheme } from '../../src/contexts/ThemeContext';
 import { fonts } from '../../src/constants/fonts';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
+import { Platform } from 'react-native';
 import type { CategoryBreakdown, MonthlyTrend } from '../../src/types';
 
 export default function Reports() {
-  const { colors } = useTheme();
+  const { colors, theme } = useTheme();
   const [month, setMonth] = useState(getCurrentMonth());
   const [period, setPeriod] = useState(6);
   const [breakdown, setBreakdown] = useState<CategoryBreakdown[]>([]);
@@ -59,125 +62,161 @@ export default function Reports() {
   }
 
   return (
-    <SafeAreaView style={[st.container, { backgroundColor: colors.bg }]} testID="reports-screen">
-      <ScrollView showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} tintColor={colors.brand} />} contentContainerStyle={st.scroll}>
-        <Text style={[st.screenTitle, { color: colors.text, fontFamily: fonts.bold }]}>Laporan</Text>
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      {/* Premium Background Elements */}
+      <View style={StyleSheet.absoluteFill}>
+        <LinearGradient
+          colors={theme === 'dark' ? ['#0A1210', '#111827', '#0A1210'] : ['#F8FAFC', '#F1F5F9', '#EFF6FF']}
+          style={StyleSheet.absoluteFill}
+        />
+        <View style={[st.blob, { top: -50, left: -50, backgroundColor: colors.brand, opacity: theme === 'dark' ? 0.08 : 0.12 }]} />
+        <View style={[st.blob, { bottom: 100, right: -50, backgroundColor: '#10B981', opacity: theme === 'dark' ? 0.05 : 0.08 }]} />
+      </View>
 
-        <View style={st.monthNav}>
-          <TouchableOpacity testID="report-prev-month" onPress={() => setMonth(m => getMonthOffset(m, -1))}>
-            <Ionicons name="chevron-back" size={22} color={colors.text} />
-          </TouchableOpacity>
-          <Text style={[st.monthText, { color: colors.text, fontFamily: fonts.semiBold }]}>{formatMonthYear(month)}</Text>
-          <TouchableOpacity testID="report-next-month" onPress={() => setMonth(m => getMonthOffset(m, 1))}>
-            <Ionicons name="chevron-forward" size={22} color={colors.text} />
-          </TouchableOpacity>
-        </View>
+      <SafeAreaView style={{ flex: 1 }} testID="reports-screen">
+        <ScrollView showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} tintColor={colors.brand} />} contentContainerStyle={st.scroll}>
+          <Text style={[st.screenTitle, { color: colors.text, fontFamily: fonts.bold }]}>Laporan</Text>
 
-        <View style={st.summaryRow}>
-          <View style={[st.summaryCard, { backgroundColor: colors.bgCard, borderColor: colors.border, borderLeftColor: colors.income }]}>
-            <Text style={[st.sumLabel, { color: colors.textTertiary, fontFamily: fonts.regular }]}>Pemasukan</Text>
-            <Text style={[st.sumVal, { color: colors.income, fontFamily: fonts.bold }]}>{formatRupiah(summary?.month_income || 0)}</Text>
+          <View style={st.monthNav}>
+            <TouchableOpacity testID="report-prev-month" onPress={() => setMonth(m => getMonthOffset(m, -1))}>
+              <Ionicons name="chevron-back" size={22} color={colors.text} />
+            </TouchableOpacity>
+            <Text style={[st.monthText, { color: colors.text, fontFamily: fonts.semiBold }]}>{formatMonthYear(month)}</Text>
+            <TouchableOpacity testID="report-next-month" onPress={() => setMonth(m => getMonthOffset(m, 1))}>
+              <Ionicons name="chevron-forward" size={22} color={colors.text} />
+            </TouchableOpacity>
           </View>
-          <View style={[st.summaryCard, { backgroundColor: colors.bgCard, borderColor: colors.border, borderLeftColor: colors.expense }]}>
-            <Text style={[st.sumLabel, { color: colors.textTertiary, fontFamily: fonts.regular }]}>Pengeluaran</Text>
-            <Text style={[st.sumVal, { color: colors.expense, fontFamily: fonts.bold }]}>{formatRupiah(summary?.month_expense || 0)}</Text>
-          </View>
-        </View>
 
-        <View style={[st.netCard, { backgroundColor: colors.bgCard, borderColor: colors.border }]}>
-          <Text style={[st.netLabel, { color: colors.textTertiary, fontFamily: fonts.regular }]}>Selisih Bulan Ini</Text>
-          <Text style={[st.netVal, { color: (summary?.month_net || 0) >= 0 ? colors.income : colors.expense, fontFamily: fonts.bold }]}>
-            {(summary?.month_net || 0) >= 0 ? '+' : ''}{formatRupiah(summary?.month_net || 0)}
-          </Text>
-        </View>
-
-        <View style={[st.card, { backgroundColor: colors.bgCard, borderColor: colors.border }]}>
-          <Text style={[st.cardTitle, { color: colors.text, fontFamily: fonts.semiBold }]}>Tren Keuangan</Text>
-          <View style={st.periodRow}>
-            {periods.map(p => (
-              <TouchableOpacity key={p.v} testID={`period-${p.v}`}
-                style={[st.periodPill, { backgroundColor: colors.bgSecondary }, period === p.v && { backgroundColor: colors.brand }]}
-                onPress={() => setPeriod(p.v)}>
-                <Text style={[st.periodText, { color: colors.textTertiary, fontFamily: fonts.medium }, period === p.v && { color: colors.textInverse }]}>{p.l}</Text>
-              </TouchableOpacity>
-            ))}
+          <View style={st.summaryRow}>
+            <View style={st.glassWrapperSmall}>
+              <BlurView intensity={theme === 'dark' ? 20 : 60} tint={theme === 'dark' ? 'dark' : 'light'} style={st.glassCardSmall}>
+                <View style={[st.summaryCardInner, { borderLeftColor: '#4ADE80', borderLeftWidth: 3, borderColor: colors.border }]}>
+                  <Text style={[st.sumLabel, { color: colors.textTertiary, fontFamily: fonts.regular }]}>Pemasukan</Text>
+                  <Text style={[st.sumVal, { color: '#4ADE80', fontFamily: fonts.bold }]}>{formatRupiah(summary?.month_income || 0)}</Text>
+                </View>
+              </BlurView>
+            </View>
+            <View style={st.glassWrapperSmall}>
+              <BlurView intensity={theme === 'dark' ? 20 : 60} tint={theme === 'dark' ? 'dark' : 'light'} style={st.glassCardSmall}>
+                <View style={[st.summaryCardInner, { borderLeftColor: '#FB7185', borderLeftWidth: 3, borderColor: colors.border }]}>
+                  <Text style={[st.sumLabel, { color: colors.textTertiary, fontFamily: fonts.regular }]}>Pengeluaran</Text>
+                  <Text style={[st.sumVal, { color: '#FB7185', fontFamily: fonts.bold }]}>{formatRupiah(summary?.month_expense || 0)}</Text>
+                </View>
+              </BlurView>
+            </View>
           </View>
-          {incomeData.length > 0 && (
-            <View style={st.chartCenter}>
-              <LineChart
-                data={incomeData} data2={expenseData}
-                color1={colors.income} color2={colors.expense}
-                curved thickness={2}
-                hideDataPoints={false} dataPointsColor1={colors.income} dataPointsColor2={colors.expense}
-                dataPointsRadius={3}
-                yAxisThickness={1} yAxisColor={colors.border} xAxisThickness={1} xAxisColor={colors.border}
-                hideRules spacing={65} noOfSections={4} 
-                yAxisTextStyle={{ color: colors.textTertiary, fontSize: 10, fontFamily: fonts.regular }}
-                formatYLabel={(val: string) => {
-                  const v = Number(val);
-                  return v >= 1000000 ? (v / 1000000).toFixed(0) + 'M' : v >= 1000 ? (v / 1000).toFixed(0) + 'K' : String(v);
-                }}
-                width={280}
-              />
-              <View style={st.lineLegend}>
-                <View style={st.lineLegendItem}><View style={[st.lineLegendDot, { backgroundColor: colors.income }]} /><Text style={[st.lineLegendText, { color: colors.textSecondary, fontFamily: fonts.regular }]}>Pemasukan</Text></View>
-                <View style={st.lineLegendItem}><View style={[st.lineLegendDot, { backgroundColor: colors.expense }]} /><Text style={[st.lineLegendText, { color: colors.textSecondary, fontFamily: fonts.regular }]}>Pengeluaran</Text></View>
+
+          <View style={st.glassWrapper}>
+            <BlurView intensity={theme === 'dark' ? 20 : 60} tint={theme === 'dark' ? 'dark' : 'light'} style={st.glassCard}>
+              <View style={[st.netCardInner, { borderColor: colors.border }]}>
+                <Text style={[st.netLabel, { color: colors.textTertiary, fontFamily: fonts.regular }]}>Selisih Bulan Ini</Text>
+                <Text style={[st.netVal, { color: (summary?.month_net || 0) >= 0 ? '#4ADE80' : '#FB7185', fontFamily: fonts.bold }]}>
+                  {(summary?.month_net || 0) >= 0 ? '+' : ''}{formatRupiah(summary?.month_net || 0)}
+                </Text>
               </View>
+            </BlurView>
+          </View>
+
+          <View style={st.glassWrapperLarge}>
+            <BlurView intensity={theme === 'dark' ? 20 : 60} tint={theme === 'dark' ? 'dark' : 'light'} style={st.glassCardLarge}>
+              <View style={[st.cardInner, { borderColor: colors.border }]}>
+                <Text style={[st.cardTitle, { color: colors.text, fontFamily: fonts.semiBold }]}>Tren Keuangan</Text>
+                <View style={st.periodRow}>
+                  {periods.map(p => (
+                    <TouchableOpacity key={p.v} testID={`period-${p.v}`}
+                      style={[st.periodPill, { backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }, period === p.v && { backgroundColor: colors.brand }]}
+                      onPress={() => setPeriod(p.v)}>
+                      <Text style={[st.periodText, { color: colors.textTertiary, fontFamily: fonts.medium }, period === p.v && { color: colors.textInverse }]}>{p.l}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                {incomeData.length > 0 && (
+                  <View style={st.chartCenter}>
+                    <LineChart
+                      data={incomeData} data2={expenseData}
+                      color1="#4ADE80" color2="#FB7185"
+                      curved thickness={2}
+                      hideDataPoints={false} dataPointsColor1="#4ADE80" dataPointsColor2="#FB7185"
+                      dataPointsRadius={3}
+                      yAxisThickness={1} yAxisColor={colors.border} xAxisThickness={1} xAxisColor={colors.border}
+                      hideRules spacing={65} noOfSections={4} 
+                      yAxisTextStyle={{ color: colors.textTertiary, fontSize: 10, fontFamily: fonts.regular }}
+                      formatYLabel={(val: string) => {
+                        const v = Number(val);
+                        return v >= 1000000 ? (v / 1000000).toFixed(0) + 'M' : v >= 1000 ? (v / 1000).toFixed(0) + 'K' : String(v);
+                      }}
+                      width={280}
+                      backgroundColor="transparent"
+                    />
+                    <View style={st.lineLegend}>
+                      <View style={st.lineLegendItem}><View style={[st.lineLegendDot, { backgroundColor: '#4ADE80' }]} /><Text style={[st.lineLegendText, { color: colors.textSecondary, fontFamily: fonts.regular }]}>Pemasukan</Text></View>
+                      <View style={st.lineLegendItem}><View style={[st.lineLegendDot, { backgroundColor: '#FB7185' }]} /><Text style={[st.lineLegendText, { color: colors.textSecondary, fontFamily: fonts.regular }]}>Pengeluaran</Text></View>
+                    </View>
+                  </View>
+                )}
+              </View>
+            </BlurView>
+          </View>
+
+          {pieData.length > 0 && (
+            <View style={st.glassWrapperLarge}>
+              <BlurView intensity={theme === 'dark' ? 20 : 60} tint={theme === 'dark' ? 'dark' : 'light'} style={st.glassCardLarge}>
+                <View style={[st.cardInner, { borderColor: colors.border }]}>
+                  <Text style={[st.cardTitle, { color: colors.text, fontFamily: fonts.semiBold }]}>Distribusi Pengeluaran</Text>
+                  <View style={st.chartCenter}>
+                    <PieChart data={pieData} donut innerRadius={45} radius={75} innerCircleColor="transparent" />
+                  </View>
+                  <View style={st.breakdownList}>
+                    {breakdown.map(item => (
+                      <View key={item.category_id} style={st.breakdownRow}>
+                        <View style={[st.bDot, { backgroundColor: item.category_color }]} />
+                        <Text style={[st.bName, { color: colors.textSecondary, fontFamily: fonts.regular }]} numberOfLines={1}>{item.category_name}</Text>
+                        <Text style={[st.bAmt, { color: colors.text, fontFamily: fonts.semiBold }]}>{formatRupiah(item.total)}</Text>
+                        <Text style={[st.bPct, { color: colors.textTertiary, fontFamily: fonts.regular }]}>{item.percentage}%</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              </BlurView>
             </View>
           )}
-        </View>
 
-        {pieData.length > 0 && (
-          <View style={[st.card, { backgroundColor: colors.bgCard, borderColor: colors.border }]}>
-            <Text style={[st.cardTitle, { color: colors.text, fontFamily: fonts.semiBold }]}>Distribusi Pengeluaran</Text>
-            <View style={st.chartCenter}>
-              <PieChart data={pieData} donut innerRadius={45} radius={75} innerCircleColor={colors.bgCard} />
-            </View>
-            <View style={st.breakdownList}>
-              {breakdown.map(item => (
-                <View key={item.category_id} style={st.breakdownRow}>
-                  <View style={[st.bDot, { backgroundColor: item.category_color }]} />
-                  <Text style={[st.bName, { color: colors.textSecondary, fontFamily: fonts.regular }]} numberOfLines={1}>{item.category_name}</Text>
-                  <Text style={[st.bAmt, { color: colors.text, fontFamily: fonts.semiBold }]}>{formatRupiah(item.total)}</Text>
-                  <Text style={[st.bPct, { color: colors.textTertiary, fontFamily: fonts.regular }]}>{item.percentage}%</Text>
+          {stats && (
+            <View style={st.glassWrapperLarge}>
+              <BlurView intensity={theme === 'dark' ? 20 : 60} tint={theme === 'dark' ? 'dark' : 'light'} style={st.glassCardLarge}>
+                <View style={[st.cardInner, { borderColor: colors.border }]}>
+                  <Text style={[st.cardTitle, { color: colors.text, fontFamily: fonts.semiBold }]}>Statistik</Text>
+                  <View style={st.statGrid}>
+                    <View style={[st.statItem, { backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }]}>
+                      <Ionicons name="calendar-outline" size={20} color={colors.accent} />
+                      <Text style={[st.statLabel, { color: colors.textTertiary, fontFamily: fonts.regular }]}>Rata-rata Harian</Text>
+                      <Text style={[st.statVal, { color: colors.text, fontFamily: fonts.bold }]}>{formatRupiah(stats.avg_daily_expense)}</Text>
+                    </View>
+                    <View style={[st.statItem, { backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }]}>
+                      <Ionicons name="flame-outline" size={20} color="#FB7185" />
+                      <Text style={[st.statLabel, { color: colors.textTertiary, fontFamily: fonts.regular }]}>Tertinggi</Text>
+                      <Text style={[st.statVal, { color: colors.text, fontFamily: fonts.bold }]}>{formatRupiah(stats.highest_day_amount)}</Text>
+                    </View>
+                    <View style={[st.statItem, { backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }]}>
+                      <Ionicons name="receipt-outline" size={20} color={colors.brand} />
+                      <Text style={[st.statLabel, { color: colors.textTertiary, fontFamily: fonts.regular }]}>Transaksi</Text>
+                      <Text style={[st.statVal, { color: colors.text, fontFamily: fonts.bold }]}>{summary?.transaction_count || 0}</Text>
+                    </View>
+                    <View style={[st.statItem, { backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }]}>
+                      <Ionicons name="today-outline" size={20} color="#4ADE80" />
+                      <Text style={[st.statLabel, { color: colors.textTertiary, fontFamily: fonts.regular }]}>Hari Aktif</Text>
+                      <Text style={[st.statVal, { color: colors.text, fontFamily: fonts.bold }]}>{stats.days_with_expense}</Text>
+                    </View>
+                  </View>
                 </View>
-              ))}
+              </BlurView>
             </View>
-          </View>
-        )}
+          )}
 
-        {stats && (
-          <View style={[st.card, { backgroundColor: colors.bgCard, borderColor: colors.border }]}>
-            <Text style={[st.cardTitle, { color: colors.text, fontFamily: fonts.semiBold }]}>Statistik</Text>
-            <View style={st.statGrid}>
-              <View style={[st.statItem, { backgroundColor: colors.bgSecondary }]}>
-                <Ionicons name="calendar-outline" size={20} color={colors.accent} />
-                <Text style={[st.statLabel, { color: colors.textTertiary, fontFamily: fonts.regular }]}>Rata-rata Harian</Text>
-                <Text style={[st.statVal, { color: colors.text, fontFamily: fonts.bold }]}>{formatRupiah(stats.avg_daily_expense)}</Text>
-              </View>
-              <View style={[st.statItem, { backgroundColor: colors.bgSecondary }]}>
-                <Ionicons name="flame-outline" size={20} color={colors.expense} />
-                <Text style={[st.statLabel, { color: colors.textTertiary, fontFamily: fonts.regular }]}>Tertinggi</Text>
-                <Text style={[st.statVal, { color: colors.text, fontFamily: fonts.bold }]}>{formatRupiah(stats.highest_day_amount)}</Text>
-              </View>
-              <View style={[st.statItem, { backgroundColor: colors.bgSecondary }]}>
-                <Ionicons name="receipt-outline" size={20} color={colors.brand} />
-                <Text style={[st.statLabel, { color: colors.textTertiary, fontFamily: fonts.regular }]}>Transaksi</Text>
-                <Text style={[st.statVal, { color: colors.text, fontFamily: fonts.bold }]}>{summary?.transaction_count || 0}</Text>
-              </View>
-              <View style={[st.statItem, { backgroundColor: colors.bgSecondary }]}>
-                <Ionicons name="today-outline" size={20} color={colors.income} />
-                <Text style={[st.statLabel, { color: colors.textTertiary, fontFamily: fonts.regular }]}>Hari Aktif</Text>
-                <Text style={[st.statVal, { color: colors.text, fontFamily: fonts.bold }]}>{stats.days_with_expense}</Text>
-              </View>
-            </View>
-          </View>
-        )}
-
-
-        <View style={{ height: 30 }} />
-      </ScrollView>
-    </SafeAreaView>
+          <View style={{ height: 30 }} />
+        </ScrollView>
+      </SafeAreaView>
+    </View>
   );
 }
 
@@ -188,8 +227,17 @@ const st = StyleSheet.create({
   screenTitle: { fontSize: 24, marginBottom: 8 },
   monthNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, gap: 16 },
   monthText: { fontSize: 15 },
-  summaryRow: { flexDirection: 'row', gap: 12, marginBottom: 12 },
-  summaryCard: { flex: 1, borderRadius: 14, padding: 16, borderLeftWidth: 3, borderWidth: 1 },
+  summaryRow: { flexDirection: 'row', gap: 12, marginBottom: 16 },
+  glassWrapper: { borderRadius: 16, overflow: 'hidden', marginBottom: 16, elevation: 6, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.1, shadowRadius: 10 },
+  glassWrapperSmall: { flex: 1, borderRadius: 16, overflow: 'hidden', elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 8 },
+  glassWrapperLarge: { borderRadius: 20, overflow: 'hidden', marginBottom: 16, elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.1, shadowRadius: 12 },
+  glassCard: { borderRadius: 16 },
+  glassCardSmall: { borderRadius: 16 },
+  glassCardLarge: { borderRadius: 20 },
+  summaryCardInner: { padding: 16, borderRadius: 16, borderWidth: 1 },
+  netCardInner: { padding: 16, borderRadius: 16, borderWidth: 1, alignItems: 'center' },
+  cardInner: { padding: 20, borderRadius: 20, borderWidth: 1 },
+  blob: { position: 'absolute', width: 300, height: 300, borderRadius: 150, filter: Platform.OS === 'ios' ? 'blur(60px)' : 'none' },
   sumLabel: { fontSize: 12, marginBottom: 4 },
   sumVal: { fontSize: 16 },
   netCard: { borderRadius: 14, padding: 16, marginBottom: 16, borderWidth: 1, alignItems: 'center' },

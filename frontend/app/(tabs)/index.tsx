@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -9,11 +9,13 @@ import { formatRupiah, getCurrentMonth, formatDate, formatDayName, formatMonthYe
 import { useTheme } from '../../src/contexts/ThemeContext';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { fonts } from '../../src/constants/fonts';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import type { Summary, CategoryBreakdown, DailyTrend, Transaction, Category } from '../../src/types';
 
 export default function Dashboard() {
   const router = useRouter();
-  const { colors } = useTheme();
+  const { colors, theme } = useTheme();
   const { user } = useAuth();
   const [summary, setSummary] = useState<Summary | null>(null);
   const [breakdown, setBreakdown] = useState<CategoryBreakdown[]>([]);
@@ -51,115 +53,152 @@ export default function Dashboard() {
   }));
 
   return (
-    <SafeAreaView style={[s.container, { backgroundColor: colors.bg }]} testID="dashboard-screen">
-      <ScrollView showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} tintColor={colors.brand} />} contentContainerStyle={s.scroll}>
-        {/* Header */}
-        <View style={s.header}>
-          <View>
-            <Text style={[s.greeting, { color: colors.textTertiary, fontFamily: fonts.regular }]}>Selamat Datang, {user?.name || 'User'} 👋</Text>
-            <Text style={[s.headerTitle, { color: colors.text, fontFamily: fonts.bold }]}>Keuanganmu</Text>
-          </View>
-        </View>
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      {/* Premium Background Elements */}
+      <View style={StyleSheet.absoluteFill}>
+        <LinearGradient
+          colors={theme === 'dark' ? ['#0A1210', '#111827', '#0A1210'] : ['#F8FAFC', '#F1F5F9', '#EFF6FF']}
+          style={StyleSheet.absoluteFill}
+        />
+        <View style={[s.blob, { top: -50, left: -50, backgroundColor: colors.brand, opacity: theme === 'dark' ? 0.08 : 0.12 }]} />
+        <View style={[s.blob, { bottom: 100, right: -50, backgroundColor: '#10B981', opacity: theme === 'dark' ? 0.05 : 0.08 }]} />
+      </View>
 
-        {/* Kartu Saldo */}
-        <View style={[s.balanceCard, { backgroundColor: '#064E3B' }]} testID="balance-card">
-          <Text style={[s.balLabel, { fontFamily: fonts.regular }]}>Saldo Total</Text>
-          <Text style={[s.balAmount, { fontFamily: fonts.bold }]}>{formatRupiah(summary?.balance || 0)}</Text>
-          <View style={s.balRow}>
-            <View style={s.balItem}>
-              <Ionicons name="arrow-up-circle" size={20} color="#A8F0C6" />
-              <View style={{ marginLeft: 6 }}>
-                <Text style={[s.balItemLabel, { fontFamily: fonts.regular }]}>Pemasukan</Text>
-                <Text style={[s.balItemVal, { color: '#A8F0C6', fontFamily: fonts.semiBold }]}>+{formatRupiah(summary?.month_income || 0)}</Text>
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        <ScrollView showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} tintColor={colors.brand} />} contentContainerStyle={s.scroll}>
+          {/* Enhanced Premium Header */}
+          <View style={s.headerWrapper}>
+            <View style={s.greetRow}>
+              <View>
+                <Text style={[s.greet, { color: colors.textTertiary, fontFamily: fonts.medium }]}>Halo,</Text>
+                <Text style={[s.user, { color: colors.text, fontFamily: fonts.bold }]}>{user?.name || 'Pengguna'}</Text>
               </View>
-            </View>
-            <View style={s.balItem}>
-              <Ionicons name="arrow-down-circle" size={20} color="#FFB4B4" />
-              <View style={{ marginLeft: 6 }}>
-                <Text style={[s.balItemLabel, { fontFamily: fonts.regular }]}>Pengeluaran</Text>
-                <Text style={[s.balItemVal, { color: '#FFB4B4', fontFamily: fonts.semiBold }]}>-{formatRupiah(summary?.month_expense || 0)}</Text>
-              </View>
+              <TouchableOpacity testID="settings-btn" onPress={() => router.push('/settings')} style={[s.iconBtn, { backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', borderColor: colors.border }]}>
+                <Ionicons name="person-circle-outline" size={28} color={colors.brand} />
+              </TouchableOpacity>
             </View>
           </View>
-        </View>
 
-
-        {/* Grafik Pengeluaran */}
-        {pieData.length > 0 && (
-          <View style={[s.card, { backgroundColor: colors.bgCard, borderColor: colors.border }]} testID="expense-breakdown-card">
-            <Text style={[s.cardTitle, { color: colors.text, fontFamily: fonts.semiBold }]}>Pengeluaran {formatMonthYear(month)}</Text>
-            <View style={s.chartCenter}>
-              <PieChart data={pieData} donut innerRadius={50} radius={80} innerCircleColor={colors.bgCard}
-                centerLabelComponent={() => (
-                  <View style={{ alignItems: 'center' }}>
-                    <Text style={{ fontSize: 11, color: colors.textTertiary, fontFamily: fonts.regular }}>Total</Text>
-                    <Text style={{ fontSize: 13, color: colors.text, fontFamily: fonts.bold }}>{formatRupiah(summary?.month_expense || 0)}</Text>
+          {/* Balance Glass Card */}
+          <View style={s.glassWrapper}>
+            <BlurView intensity={theme === 'dark' ? 40 : 80} tint={theme === 'dark' ? 'dark' : 'light'} style={s.glassCard}>
+              <LinearGradient
+                colors={['#10B981CC', '#064E3BCC']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={s.cardGradient}
+              >
+                <Text style={[s.balLabel, { fontFamily: fonts.regular, color: 'rgba(255,255,255,0.8)' }]}>Total Saldo</Text>
+                <Text style={[s.balVal, { fontFamily: fonts.bold, color: '#FFF', textShadowColor: 'rgba(0,0,0,0.2)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 4 }]}>
+                  {formatRupiah(summary?.balance || 0)}
+                </Text>
+                <View style={s.balLine} />
+                <View style={s.balBottom}>
+                  <View>
+                    <Text style={[s.balSub, { color: 'rgba(255,255,255,0.7)', fontFamily: fonts.regular }]}>Bulan Ini</Text>
+                    <Text style={[s.balChange, { color: '#FFF', fontFamily: fonts.semiBold }]}>
+                      {(summary?.month_income || 0) - (summary?.month_expense || 0) >= 0 ? '+' : ''}{formatRupiah((summary?.month_income || 0) - (summary?.month_expense || 0))}
+                    </Text>
                   </View>
-                )}
-              />
-            </View>
-            <View style={s.legendWrap}>
-              {breakdown.slice(0, 5).map(item => (
-                <View key={item.category_id} style={s.legendItem}>
-                  <View style={[s.legendDot, { backgroundColor: item.category_color }]} />
-                  <Text style={[s.legendText, { color: colors.textSecondary, fontFamily: fonts.regular }]} numberOfLines={1}>{item.category_name}</Text>
-                  <Text style={[s.legendPct, { color: colors.text, fontFamily: fonts.semiBold }]}>{item.percentage}%</Text>
+                  <Ionicons name={((summary?.month_income || 0) - (summary?.month_expense || 0)) >= 0 ? 'stats-chart' : 'trending-down'} size={24} color="rgba(255,255,255,0.6)" />
                 </View>
-              ))}
-            </View>
+              </LinearGradient>
+            </BlurView>
           </View>
-        )}
 
-        {/* Grafik Tren 7 Hari */}
-        {barData.some(d => d.value > 0) && (
-          <View style={[s.card, { backgroundColor: colors.bgCard, borderColor: colors.border }]} testID="daily-trend-card">
-            <Text style={[s.cardTitle, { color: colors.text, fontFamily: fonts.semiBold }]}>Tren 7 Hari Terakhir</Text>
-            <View style={s.chartCenter}>
-              <BarChart data={barData} barWidth={26} spacing={14} barBorderRadius={6} frontColor={colors.brand}
-                yAxisThickness={0} xAxisThickness={1} xAxisColor={colors.border} noOfSections={4}
-                hideRules hideYAxisText xAxisLabelTextStyle={{ color: colors.textTertiary, fontSize: 10, fontFamily: fonts.regular }}
-              />
-            </View>
-          </View>
-        )}
-
-        {/* Transaksi Terakhir */}
-        <View style={[s.card, { backgroundColor: colors.bgCard, borderColor: colors.border }]} testID="recent-transactions-card">
-          <View style={s.cardHead}>
-            <Text style={[s.cardTitle, { color: colors.text, fontFamily: fonts.semiBold }]}>Transaksi Terakhir</Text>
-            <TouchableOpacity testID="see-all-transactions" onPress={() => router.push('/(tabs)/transactions' as any)}>
-              <Text style={[s.seeAll, { color: colors.accent, fontFamily: fonts.semiBold }]}>Lihat Semua</Text>
-            </TouchableOpacity>
-          </View>
-          {recentTx.length === 0 ? (
-            <View style={s.empty}>
-              <Ionicons name="receipt-outline" size={48} color={colors.textTertiary} />
-              <Text style={[s.emptyTitle, { color: colors.text, fontFamily: fonts.semiBold }]}>Belum ada transaksi</Text>
-              <Text style={[s.emptySub, { color: colors.textTertiary, fontFamily: fonts.regular }]}>Mulai catat keuanganmu!</Text>
-            </View>
-          ) : (
-            recentTx.map(tx => {
-              const cat = catMap(tx.category_id);
-              return (
-                <View key={tx.id} style={[s.txRow, { borderBottomColor: colors.border }]} testID={`recent-tx-${tx.id}`}>
-                  <View style={[s.txIcon, { backgroundColor: (cat?.color || '#7D7D7D') + '18' }]}>
-                    <Ionicons name={(cat?.icon || 'ellipsis-horizontal') as any} size={18} color={cat?.color || '#7D7D7D'} />
+          {/* Regular Cards with Glass Effect */}
+          {breakdown.length > 0 && (
+            <View style={s.glassWrapperLarge}>
+              <BlurView intensity={theme === 'dark' ? 20 : 60} tint={theme === 'dark' ? 'dark' : 'light'} style={s.glassCardLarge}>
+                <View style={[s.cardInner, { borderColor: colors.border }]}>
+                  <View style={s.cardHead}>
+                    <Text style={[s.cardTitle, { color: colors.text, fontFamily: fonts.semiBold }]}>Alokasi Pengeluaran</Text>
                   </View>
-                  <View style={s.txInfo}>
-                    <Text style={[s.txName, { color: colors.text, fontFamily: fonts.medium }]} numberOfLines={1}>{cat?.name || 'Lainnya'}</Text>
-                    <Text style={[s.txDate, { color: colors.textTertiary, fontFamily: fonts.regular }]}>{formatDate(tx.date)}</Text>
+                  <View style={s.chartCenter}>
+                    <PieChart
+                      data={breakdown.map(item => ({
+                        value: item.total,
+                        color: item.category_color || colors.brand,
+                        text: `${item.percentage}%`,
+                      }))}
+                      donut
+                      innerRadius={45}
+                      radius={75}
+                      innerCircleColor="transparent"
+                      focusOnPress
+                    />
                   </View>
-                  <Text style={[s.txAmt, { color: tx.type === 'income' ? colors.income : colors.expense, fontFamily: fonts.bold }]}>
-                    {tx.type === 'income' ? '+' : '-'}{formatRupiah(tx.amount)}
-                  </Text>
+                  <View style={s.legendWrap}>
+                    {breakdown.map((item, idx) => (
+                      <View key={idx} style={s.legendItem}>
+                        <View style={[s.legendDot, { backgroundColor: item.category_color }]} />
+                        <Text style={[s.legendText, { color: colors.textSecondary, fontFamily: fonts.regular }]} numberOfLines={1}>{item.category_name}</Text>
+                        <Text style={[s.legendPct, { color: colors.text, fontFamily: fonts.semiBold }]}>{item.percentage}%</Text>
+                      </View>
+                    ))}
+                  </View>
                 </View>
-              );
-            })
+              </BlurView>
+            </View>
           )}
-        </View>
-        <View style={{ height: 20 }} />
-      </ScrollView>
-    </SafeAreaView>
+
+          {barData.some(d => d.value > 0) && (
+            <View style={s.glassWrapperSmall}>
+              <BlurView intensity={theme === 'dark' ? 20 : 60} tint={theme === 'dark' ? 'dark' : 'light'} style={s.glassCardSmall}>
+                <View style={[s.cardInner, { borderColor: colors.border }]}>
+                  <Text style={[s.cardTitle, { color: colors.text, fontFamily: fonts.semiBold }]}>Tren 7 Hari Terakhir</Text>
+                  <View style={s.chartCenter}>
+                    <BarChart data={barData} barWidth={26} spacing={14} barBorderRadius={6} frontColor={colors.brand}
+                      yAxisThickness={0} xAxisThickness={1} xAxisColor={colors.border} noOfSections={4}
+                      hideRules hideYAxisText xAxisLabelTextStyle={{ color: colors.textTertiary, fontSize: 10, fontFamily: fonts.regular }}
+                    />
+                  </View>
+                </View>
+              </BlurView>
+            </View>
+          )}
+
+          <View style={s.glassWrapperSmall}>
+             <BlurView intensity={theme === 'dark' ? 20 : 60} tint={theme === 'dark' ? 'dark' : 'light'} style={s.glassCardSmall}>
+                <View style={[s.cardInner, { borderColor: colors.border }]}>
+                  <View style={s.cardHead}>
+                    <Text style={[s.cardTitle, { color: colors.text, fontFamily: fonts.semiBold }]}>Transaksi Terakhir</Text>
+                    <TouchableOpacity testID="see-all-transactions" onPress={() => router.push('/(tabs)/transactions' as any)}>
+                      <Text style={[s.seeAll, { color: colors.accent, fontFamily: fonts.semiBold }]}>Lihat Semua</Text>
+                    </TouchableOpacity>
+                  </View>
+                  {recentTx.length === 0 ? (
+                    <View style={s.empty}>
+                      <Ionicons name="receipt-outline" size={48} color={colors.textTertiary} />
+                      <Text style={[s.emptyTitle, { color: colors.text, fontFamily: fonts.semiBold }]}>Belum ada transaksi</Text>
+                      <Text style={[s.emptySub, { color: colors.textTertiary, fontFamily: fonts.regular }]}>Mulai catat keuanganmu!</Text>
+                    </View>
+                  ) : (
+                    recentTx.map(tx => {
+                      const cat = catMap(tx.category_id);
+                      return (
+                        <View key={tx.id} style={[s.txRow, { borderBottomColor: colors.border }]} testID={`recent-tx-${tx.id}`}>
+                          <View style={[s.txIcon, { backgroundColor: (cat?.color || '#7D7D7D') + '18' }]}>
+                            <Ionicons name={(cat?.icon || 'ellipsis-horizontal') as any} size={18} color={cat?.color || '#7D7D7D'} />
+                          </View>
+                          <View style={s.txInfo}>
+                            <Text style={[s.txName, { color: colors.text, fontFamily: fonts.medium }]} numberOfLines={1}>{cat?.name || 'Lainnya'}</Text>
+                            <Text style={[s.txDate, { color: colors.textTertiary, fontFamily: fonts.regular }]}>{formatDate(tx.date)}</Text>
+                          </View>
+                          <Text style={[s.txAmt, { color: tx.type === 'income' ? colors.income : colors.expense, fontFamily: fonts.bold }]}>
+                            {tx.type === 'income' ? '+' : '-'}{formatRupiah(tx.amount)}
+                          </Text>
+                        </View>
+                      );
+                    })
+                  )}
+                </View>
+             </BlurView>
+          </View>
+          <View style={{ height: 20 }} />
+        </ScrollView>
+      </SafeAreaView>
+    </View>
   );
 }
 
@@ -167,16 +206,26 @@ const s = StyleSheet.create({
   container: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   scroll: { padding: 20, paddingBottom: 40 },
-  header: { marginBottom: 20 },
-  greeting: { fontSize: 14 },
-  headerTitle: { fontSize: 28 },
-  balanceCard: { borderRadius: 20, padding: 24, marginBottom: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.25, shadowRadius: 20, elevation: 8 },
-  balLabel: { fontSize: 13, color: 'rgba(255,255,255,0.65)' },
-  balAmount: { fontSize: 30, color: '#FFF', marginVertical: 8 },
-  balRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
-  balItem: { flexDirection: 'row', alignItems: 'center' },
-  balItemLabel: { fontSize: 11, color: 'rgba(255,255,255,0.55)' },
-  balItemVal: { fontSize: 14 },
+  headerWrapper: { marginBottom: 20 },
+  greetRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  greet: { fontSize: 14 },
+  user: { fontSize: 20, marginTop: 2 },
+  iconBtn: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', borderWidth: 1 },
+  glassWrapper: { borderRadius: 24, overflow: 'hidden', marginBottom: 24, elevation: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.2, shadowRadius: 16 },
+  glassWrapperSmall: { borderRadius: 20, overflow: 'hidden', marginBottom: 16, elevation: 6, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.1, shadowRadius: 10 },
+  glassWrapperLarge: { borderRadius: 24, overflow: 'hidden', marginBottom: 16, elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.1, shadowRadius: 12 },
+  glassCard: { borderRadius: 24 },
+  glassCardSmall: { borderRadius: 20 },
+  glassCardLarge: { borderRadius: 24 },
+  cardGradient: { padding: 24, borderRadius: 24 },
+  cardInner: { padding: 20, borderRadius: 20, borderWidth: 1 },
+  blob: { position: 'absolute', width: 300, height: 300, borderRadius: 150, filter: Platform.OS === 'ios' ? 'blur(60px)' : 'none' },
+  balLabel: { fontSize: 13 },
+  balVal: { fontSize: 32, marginVertical: 8 },
+  balLine: { height: 1, backgroundColor: 'rgba(255,255,255,0.1)', marginVertical: 16 },
+  balBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  balSub: { fontSize: 11, marginBottom: 4 },
+  balChange: { fontSize: 16 },
 
   card: { borderRadius: 16, padding: 20, marginBottom: 16, borderWidth: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 16, elevation: 2 },
   cardHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },

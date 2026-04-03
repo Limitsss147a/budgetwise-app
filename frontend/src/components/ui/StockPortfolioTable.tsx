@@ -8,6 +8,7 @@ import {
   Dimensions,
   Platform
 } from "react-native";
+import { BlurView } from 'expo-blur';
 import Animated, { 
   FadeInDown, 
   useAnimatedStyle, 
@@ -39,22 +40,24 @@ interface StockTableProps {
   stocks: StockHolding[];
   onStockSelect?: (holding: StockHolding) => void;
   colors: any;
+  theme?: string;
 }
 
 export const StockPortfolioTable = ({
   title = "Ticker",
   stocks,
   onStockSelect,
-  colors
+  colors,
+  theme = 'light'
 }: StockTableProps) => {
   const [selectedIndex, setSelectedIndex] = useState<string | null>(null);
 
   const getPerformanceColor = (value: number) => {
     const isPositive = value >= 0;
     return {
-      textColor: isPositive ? "#10B981" : "#EF4444",
-      bgColor: isPositive ? "rgba(16, 185, 129, 0.1)" : "rgba(239, 68, 68, 0.1)",
-      borderColor: isPositive ? "rgba(16, 185, 129, 0.2)" : "rgba(239, 68, 68, 0.2)",
+      textColor: isPositive ? "#4ADE80" : "#FB7185",
+      bgColor: isPositive ? "rgba(74, 222, 128, 0.1)" : "rgba(251, 113, 133, 0.1)",
+      borderColor: isPositive ? "rgba(74, 222, 128, 0.2)" : "rgba(251, 113, 133, 0.2)",
     };
   };
 
@@ -85,21 +88,22 @@ export const StockPortfolioTable = ({
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.bgCard, borderColor: colors.border }]}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} bounces={false}>
-        <View>
-          {/* Header */}
-          <View style={[styles.tableHeader, { backgroundColor: colors.bgSecondary, borderBottomColor: colors.border }]}>
-            <Text style={[styles.headerCell, { width: COLUMN_WIDTHS.ticker, color: colors.textTertiary }]}>{title}</Text>
-            <Text style={[styles.headerCell, { width: COLUMN_WIDTHS.performance, color: colors.textTertiary, textAlign: 'center' }]}>P/L %</Text>
-            <Text style={[styles.headerCell, { width: COLUMN_WIDTHS.marketCap, textAlign: 'right', color: colors.textTertiary }]}>Total Value</Text>
-            <Text style={[styles.headerCell, { width: COLUMN_WIDTHS.volume, textAlign: 'center', color: colors.textTertiary }]}>Lot</Text>
-            <Text style={[styles.headerCell, { width: COLUMN_WIDTHS.price, textAlign: 'right', color: colors.textTertiary }]}>Price</Text>
-            <Text style={[styles.headerCell, { width: COLUMN_WIDTHS.change, textAlign: 'right', color: colors.textTertiary, paddingRight: 20 }]}>Daily Performance</Text>
-          </View>
+    <View style={styles.glassWrapper}>
+      <BlurView intensity={theme === 'dark' ? 30 : 60} tint={theme === 'dark' ? 'dark' : 'light'} style={[styles.container, { borderColor: colors.border }]}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} bounces={false}>
+          <View>
+            {/* Header */}
+            <View style={[styles.tableHeader, { backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)', borderBottomColor: colors.border }]}>
+              <Text style={[styles.headerCell, { width: COLUMN_WIDTHS.ticker, color: colors.textTertiary }]}>{title}</Text>
+              <Text style={[styles.headerCell, { width: COLUMN_WIDTHS.performance, color: colors.textTertiary, textAlign: 'center' }]}>P/L %</Text>
+              <Text style={[styles.headerCell, { width: COLUMN_WIDTHS.marketCap, textAlign: 'right', color: colors.textTertiary }]}>Total Value</Text>
+              <Text style={[styles.headerCell, { width: COLUMN_WIDTHS.volume, textAlign: 'center', color: colors.textTertiary }]}>Lot</Text>
+              <Text style={[styles.headerCell, { width: COLUMN_WIDTHS.price, textAlign: 'right', color: colors.textTertiary }]}>Price</Text>
+              <Text style={[styles.headerCell, { width: COLUMN_WIDTHS.change, textAlign: 'right', color: colors.textTertiary, paddingRight: 20 }]}>Daily Performance</Text>
+            </View>
 
-          {/* Rows */}
-          <View style={styles.rowsContainer}>
+            {/* Rows */}
+            <View>
             {stocks.map((stock, index) => {
               const plStyle = getPerformanceColor(stock.unrealized_pl_percentage);
               const isSelected = selectedIndex === stock.id;
@@ -170,19 +174,27 @@ export const StockPortfolioTable = ({
                 </Animated.View>
               );
             })}
+            </View>
           </View>
-        </View>
-      </ScrollView>
+        </ScrollView>
+      </BlurView>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  glassWrapper: {
     borderRadius: 20,
     overflow: 'hidden',
-    borderWidth: 1,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
     marginVertical: 10,
+  },
+  container: {
+    borderWidth: 1,
   },
   tableHeader: {
     flexDirection: 'row',

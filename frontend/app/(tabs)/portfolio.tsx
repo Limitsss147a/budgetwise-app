@@ -9,6 +9,8 @@ import { useTheme } from '../../src/contexts/ThemeContext';
 import { fonts } from '../../src/constants/fonts';
 import { StockPortfolioTable } from '../../src/components/ui/StockPortfolioTable';
 import { formatPercentage } from '../../src/utils/format';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 
 interface Holding {
   ticker: string;
@@ -34,7 +36,7 @@ interface NetWorthData {
 }
 
 export default function PortfolioScreen() {
-  const { colors } = useTheme();
+  const { colors, theme } = useTheme();
   const [data, setData] = useState<NetWorthData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -171,63 +173,89 @@ export default function PortfolioScreen() {
           stocks={stocks}
           colors={colors}
           onStockSelect={openSheet}
+          theme={theme}
         />
       </View>
     );
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
-      <View style={styles.header}>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Portofolio Investasi</Text>
-        <TouchableOpacity onPress={handleUpdatePrices}>
-          <Ionicons name="refresh-circle" size={28} color={colors.brand} />
-        </TouchableOpacity>
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      {/* Premium Background Elements */}
+      <View style={StyleSheet.absoluteFill}>
+        <LinearGradient
+          colors={theme === 'dark' ? ['#0A1210', '#111827', '#0A1210'] : ['#F8FAFC', '#F1F5F9', '#EFF6FF']}
+          style={StyleSheet.absoluteFill}
+        />
+        {/* Decorative Blurred Blobs - Emerald themed for dark mode */}
+        <View style={[styles.blob, { top: -50, left: -50, backgroundColor: colors.brand, opacity: theme === 'dark' ? 0.08 : 0.15 }]} />
+        <View style={[styles.blob, { bottom: 100, right: -50, backgroundColor: '#059669', opacity: theme === 'dark' ? 0.05 : 0.1 }]} />
       </View>
 
-      <ScrollView 
-        style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: 120 }}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} tintColor={colors.brand} />}
-      >
-        <View style={{ paddingHorizontal: 20 }}>
-          <View style={[styles.netWorthCard, { backgroundColor: colors.brand }]}>
-            <Text style={styles.nwLabel}>Kekayaan Bersih (Net Worth)</Text>
-            <Text style={styles.nwAmount}>{formatRupiah(data?.total_asset_value || 0)}</Text>
-            
-            <View style={styles.nwDivider} />
-            
-            <View style={styles.nwRow}>
-              <View style={styles.nwItem}>
-                <Text style={styles.nwItemLabel}>Aset Likuid</Text>
-                <Text style={styles.nwItemVal}>{formatRupiah(data?.liquid_asset || 0)}</Text>
-              </View>
-              <View style={[styles.nwItem, { alignItems: 'flex-end' }]}>
-                <Text style={styles.nwItemLabel}>Aset Investasi</Text>
-                <Text style={styles.nwItemVal}>{formatRupiah(data?.total_investment_value || 0)}</Text>
-              </View>
-            </View>
-            
-            <View style={{ marginTop: 16, alignItems: 'center' }}>
-              <Text style={styles.nwItemLabel}>Total Unrealized P/L</Text>
-              <Text style={[styles.nwItemVal, { color: (data?.total_unrealized_pl || 0) >= 0 ? '#A8F0C6' : '#FFB4B4' }]}>
-                {(data?.total_unrealized_pl || 0) >= 0 ? '+' : ''}{formatRupiah(data?.total_unrealized_pl || 0)} ({(data?.total_unrealized_pl_percentage || 0).toFixed(2)}%)
-              </Text>
-            </View>
-          </View>
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        <View style={styles.header}>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>Portofolio Investasi</Text>
+          <TouchableOpacity onPress={handleUpdatePrices}>
+            <Ionicons name="refresh-circle" size={28} color={colors.brand} />
+          </TouchableOpacity>
         </View>
 
-        {(!data?.holdings || data.holdings.length === 0) ? (
-          <View style={styles.empty}>
-            <Ionicons name="trending-up-outline" size={48} color={colors.textTertiary} />
-            <Text style={[styles.emptyTitle, { color: colors.text }]}>Belum ada investasi</Text>
-            <Text style={[styles.emptySub, { color: colors.textTertiary }]}>Mulai masukkan emiten sahammu!</Text>
+        <ScrollView 
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingBottom: 120 }}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} tintColor={colors.brand} />}
+        >
+          <View style={{ paddingHorizontal: 20 }}>
+            {/* Net Worth Glass Card */}
+            <View style={styles.glassWrapper}>
+              <BlurView intensity={theme === 'dark' ? 40 : 80} tint={theme === 'dark' ? 'dark' : 'light'} style={styles.glassCard}>
+                <LinearGradient
+                  colors={[colors.brand + 'CC', colors.brand + '99']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.cardGradient}
+                >
+                  <Text style={[styles.nwLabel, { color: 'rgba(255,255,255,0.8)' }]}>Kekayaan Bersih (Net Worth)</Text>
+                  <Text style={[styles.nwAmount, { color: '#FFF', textShadowColor: 'rgba(0,0,0,0.2)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 4 }]}>
+                    {formatRupiah(data?.total_asset_value || 0)}
+                  </Text>
+                  
+                  <View style={styles.nwDivider} />
+                  
+                  <View style={styles.nwRow}>
+                    <View style={styles.nwItem}>
+                      <Text style={styles.nwItemLabel}>Aset Likuid</Text>
+                      <Text style={styles.nwItemVal}>{formatRupiah(data?.liquid_asset || 0)}</Text>
+                    </View>
+                    <View style={[styles.nwItem, { alignItems: 'flex-end' }]}>
+                      <Text style={styles.nwItemLabel}>Aset Investasi</Text>
+                      <Text style={styles.nwItemVal}>{formatRupiah(data?.total_investment_value || 0)}</Text>
+                    </View>
+                  </View>
+                  
+                  <View style={{ marginTop: 16, alignItems: 'center' }}>
+                    <Text style={styles.nwItemLabel}>Total Unrealized P/L</Text>
+                    <Text style={[styles.nwItemVal, { color: (data?.total_unrealized_pl || 0) >= 0 ? '#4ADE80' : '#FB7185' }]}>
+                      {(data?.total_unrealized_pl || 0) >= 0 ? '+' : ''}{formatRupiah(data?.total_unrealized_pl || 0)} ({(data?.total_unrealized_pl_percentage || 0).toFixed(2)}%)
+                    </Text>
+                  </View>
+                </LinearGradient>
+              </BlurView>
+            </View>
           </View>
-        ) : (
-          renderHoldingsTable()
-        )}
-      </ScrollView>
+
+          {(!data?.holdings || data.holdings.length === 0) ? (
+            <View style={styles.empty}>
+              <Ionicons name="trending-up-outline" size={48} color={colors.textTertiary} />
+              <Text style={[styles.emptyTitle, { color: colors.text }]}>Belum ada investasi</Text>
+              <Text style={[styles.emptySub, { color: colors.textTertiary }]}>Mulai masukkan emiten sahammu!</Text>
+            </View>
+          ) : (
+            renderHoldingsTable()
+          )}
+        </ScrollView>
+      </SafeAreaView>
 
       {/* Detail Bottom Sheet */}
       <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={() => setModalVisible(false)}>
@@ -329,8 +357,7 @@ export default function PortfolioScreen() {
         <Ionicons name="trending-up" size={24} color="#FFF" />
         <Text style={styles.fabText}>Tambah Saham</Text>
       </TouchableOpacity>
-
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -341,9 +368,13 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 24, fontFamily: fonts.bold },
   listContent: { paddingHorizontal: 20, paddingBottom: 100 },
   
-  netWorthCard: { borderRadius: 20, padding: 24, marginBottom: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.2, shadowRadius: 15, elevation: 6 },
-  nwLabel: { fontSize: 13, color: 'rgba(255,255,255,0.8)', fontFamily: fonts.medium, textAlign: 'center' },
-  nwAmount: { fontSize: 32, color: '#FFF', fontFamily: fonts.bold, textAlign: 'center', marginVertical: 8 },
+  netWorthCard: { borderRadius: 24, padding: 24, marginBottom: 24 },
+  glassWrapper: { borderRadius: 24, overflow: 'hidden', marginBottom: 24, elevation: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.25, shadowRadius: 16 },
+  glassCard: { borderRadius: 24 },
+  cardGradient: { padding: 24, borderRadius: 24 },
+  blob: { position: 'absolute', width: 300, height: 300, borderRadius: 150, filter: Platform.OS === 'ios' ? 'blur(60px)' : 'none' }, // Note: filter blur might not work on all Android, but giving depth
+  nwLabel: { fontSize: 13, fontFamily: fonts.medium, textAlign: 'center' },
+  nwAmount: { fontSize: 32, fontFamily: fonts.bold, textAlign: 'center', marginVertical: 8 },
   nwDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.2)', marginVertical: 16 },
   nwRow: { flexDirection: 'row', justifyContent: 'space-between' },
   nwItem: { flex: 1 },

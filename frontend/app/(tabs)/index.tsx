@@ -217,7 +217,7 @@ export default function Dashboard() {
                 </View>
              </BlurView>
           </View>
-          <View style={{ height: 20 }} />
+          <View style={{ height: 120 }} />
         </ScrollView>
       </SafeAreaView>
     </View>

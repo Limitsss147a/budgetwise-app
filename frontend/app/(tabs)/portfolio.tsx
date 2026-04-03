@@ -359,7 +359,7 @@ const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 10, paddingBottom: 15 },
   headerTitle: { fontSize: 24, fontFamily: fonts.bold },
-  listContent: { paddingHorizontal: 20, paddingBottom: 100 },
+  listContent: { paddingHorizontal: 20, paddingBottom: 150 },
   
   netWorthCard: { borderRadius: 24, padding: 24, marginBottom: 24 },
   glassWrapper: { borderRadius: 24, overflow: 'hidden', marginBottom: 24, elevation: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.25, shadowRadius: 16 },
@@ -407,7 +407,7 @@ const styles = StyleSheet.create({
   actionBtn: { flex: 1, height: 48, borderRadius: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8 },
   actionBtnText: { fontSize: 14, fontFamily: fonts.bold },
 
-  fabExtended: { position: 'absolute', bottom: Platform.OS === 'ios' ? 30 : 20, right: 20, height: 56, borderRadius: 28, paddingHorizontal: 20, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 8 },
+  fabExtended: { position: 'absolute', bottom: Platform.OS === 'ios' ? 110 : 96, right: 20, height: 56, borderRadius: 28, paddingHorizontal: 20, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 8 },
   fabText: { color: '#FFF', fontSize: 15, fontFamily: fonts.bold, marginLeft: 8 },
   
   modalOverlayCenter: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },

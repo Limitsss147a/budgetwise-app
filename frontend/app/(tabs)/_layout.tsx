@@ -3,9 +3,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { Platform, View, TouchableOpacity, StyleSheet } from 'react-native';
 import { useTheme } from '../../src/contexts/ThemeContext';
 import { fonts } from '../../src/constants/fonts';
+import { BlurView } from 'expo-blur';
 
 export default function TabsLayout() {
-  const { colors } = useTheme();
+  const { colors, theme } = useTheme();
   const router = useRouter();
   const pathname = usePathname();
 
@@ -18,15 +19,32 @@ export default function TabsLayout() {
           headerShown: false,
           tabBarActiveTintColor: colors.brand,
           tabBarInactiveTintColor: colors.textTertiary,
+          tabBarBackground: () => (
+            <BlurView
+              intensity={Platform.OS === 'ios' ? 45 : 80}
+              tint={theme === 'dark' ? 'dark' : 'light'}
+              style={[StyleSheet.absoluteFill, { borderRadius: 24, overflow: 'hidden', borderWidth: 1, borderColor: colors.border + '40' }]}
+            />
+          ),
           tabBarStyle: {
-            backgroundColor: colors.tabBg,
-            borderTopColor: colors.border,
-            borderTopWidth: 1,
-            height: Platform.OS === 'ios' ? 88 : 64,
-            paddingBottom: Platform.OS === 'ios' ? 28 : 8,
-            paddingTop: 8,
+            position: 'absolute',
+            bottom: Platform.OS === 'ios' ? 30 : 16,
+            left: 16,
+            right: 16,
+            height: 64,
+            borderRadius: 24,
+            backgroundColor: 'transparent',
+            borderTopWidth: 0,
+            elevation: 8,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 8 },
+            shadowOpacity: 0.2,
+            shadowRadius: 12,
+            paddingBottom: 0,
+            paddingTop: 0,
           },
-          tabBarLabelStyle: { fontSize: 11, fontFamily: fonts.semiBold },
+          tabBarLabelStyle: { fontSize: 10, fontFamily: fonts.semiBold, marginBottom: 8 },
+          tabBarIconStyle: { marginTop: 8 },
         }}
       >
         <Tabs.Screen name="index" options={{ title: 'Beranda', tabBarIcon: ({ color, size }) => <Ionicons name="home" size={size} color={color} /> }} />
@@ -53,7 +71,7 @@ export default function TabsLayout() {
 const st = StyleSheet.create({
   fab: {
     position: 'absolute',
-    bottom: Platform.OS === 'ios' ? 100 : 80,
+    bottom: Platform.OS === 'ios' ? 110 : 96,
     right: 20,
     width: 56,
     height: 56,

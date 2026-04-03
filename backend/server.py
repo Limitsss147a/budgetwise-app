@@ -8,8 +8,10 @@ from motor.motor_asyncio import AsyncIOMotorClient
 import os, logging, uuid, hashlib, csv, io, bcrypt, jwt
 from datetime import datetime, timezone, timedelta
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from fastapi.responses import StreamingResponse
+import yfinance as yf
+import asyncio
 
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
@@ -108,6 +110,16 @@ class BackupData(BaseModel):
     transactions: list = []
     categories: list = []
     budgets: list = []
+
+class InvestmentCreate(BaseModel):
+    ticker: str
+    lot_count: int
+    average_buy_price: float
+
+class InvestmentUpdate(BaseModel):
+    ticker: str
+    lot_count: Optional[int]
+    average_buy_price: Optional[float]
 
 # ==================== Default Categories ====================
 DEFAULT_CATEGORIES = [
@@ -455,6 +467,158 @@ async def verify_pin(data: PinRequest, user: dict = Depends(get_current_user)):
 async def remove_pin(user: dict = Depends(get_current_user)):
     await db.settings.update_one({"user_id": user["id"]}, {"$set": {"pin_hash": ""}})
     return {"message": "PIN dihapus", "has_pin": False}
+
+# ==================== Portfolio & Investments ====================
+async def fetch_stock_price(ticker: str):
+    loop = asyncio.get_event_loop()
+    def _fetch():
+        try:
+            stock = yf.Ticker(ticker)
+            hist = stock.history(period="1d")
+            if hist.empty:
+                return None
+            current_price = float(hist['Close'].iloc[-1])
+            info = stock.info
+            return {
+                "price": current_price,
+                "pbv": info.get("priceToBook"),
+                "roe": info.get("returnOnEquity"),
+                "der": info.get("debtToEquity")
+            }
+        except Exception as e:
+            logger.error(f"Error fetching yfinance for {ticker}: {e}")
+            return None
+    return await loop.run_in_executor(None, _fetch)
+
+@api_router.post("/portfolio/update-prices")
+async def update_market_prices(user: dict = Depends(get_current_user)):
+    uid = user["id"]
+    u = await db.users.find_one({"id": uid})
+    investments = u.get("investments", [])
+    updated = []
+    for inv in investments:
+        ticker = inv["ticker"]
+        data = await fetch_stock_price(ticker)
+        if data:
+            doc = {
+                "ticker": ticker,
+                "price": data["price"],
+                "pbv": data["pbv"],
+                "roe": data["roe"],
+                "der": data["der"],
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }
+            await db.market_prices.update_one({"ticker": ticker}, {"$set": doc}, upsert=True)
+            updated.append(doc)
+    return {"message": "Prices updated", "updated": updated}
+
+@api_router.get("/portfolio/net-worth")
+async def get_net_worth(user: dict = Depends(get_current_user)):
+    uid = user["id"]
+    
+    # 1. Get liquid assets
+    pipe = [{"$match": {"user_id": uid}}, {"$group": {"_id": "$type", "total": {"$sum": "$amount"}}}]
+    res = await db.transactions.aggregate(pipe).to_list(10)
+    inc = sum(r["total"] for r in res if r["_id"] == "income")
+    exp = sum(r["total"] for r in res if r["_id"] == "expense")
+    liquid_asset = inc - exp
+
+    # 2. Get investments
+    u = await db.users.find_one({"id": uid})
+    investments = u.get("investments", [])
+    
+    total_investment_value = 0
+    total_unrealized_pl = 0
+    holdings = []
+
+    for inv in investments:
+        ticker = inv["ticker"]
+        lot_count = inv["lot_count"]
+        avg_price = inv["average_buy_price"]
+        shares = lot_count * 100
+        
+        market_data = await db.market_prices.find_one({"ticker": ticker})
+        
+        current_price = market_data["price"] if market_data else avg_price
+        current_value = current_price * shares
+        total_cost = avg_price * shares
+        pl = current_value - total_cost
+        
+        total_investment_value += current_value
+        total_unrealized_pl += pl
+        
+        holdings.append({
+            "ticker": ticker,
+            "lot_count": lot_count,
+            "shares": shares,
+            "average_buy_price": avg_price,
+            "current_price": current_price,
+            "total_value": current_value,
+            "unrealized_pl": pl,
+            "unrealized_pl_percentage": (pl / total_cost * 100) if total_cost > 0 else 0,
+            "pbv": market_data["pbv"] if market_data else None,
+            "roe": market_data["roe"] if market_data else None,
+            "der": market_data["der"] if market_data else None,
+            "updated_at": market_data["updated_at"] if market_data else None
+        })
+
+    total_cost_all = sum(h["average_buy_price"] * h["shares"] for h in holdings)
+    total_asset_value = liquid_asset + total_investment_value
+
+    return {
+        "liquid_asset": liquid_asset,
+        "total_investment_value": total_investment_value,
+        "total_asset_value": total_asset_value,
+        "total_unrealized_pl": total_unrealized_pl,
+        "total_unrealized_pl_percentage": (total_unrealized_pl / total_cost_all * 100) if total_cost_all > 0 else 0,
+        "holdings": holdings
+    }
+
+@api_router.post("/portfolio/investments")
+async def add_investment(data: InvestmentCreate, user: dict = Depends(get_current_user)):
+    uid = user["id"]
+    ticker = data.ticker.upper()
+    if not ticker.endswith(".JK"):
+        ticker += ".JK"
+        
+    u = await db.users.find_one({"id": uid})
+    investments = u.get("investments", [])
+    
+    found = False
+    for inv in investments:
+        if inv["ticker"] == ticker:
+            total_shares_old = inv["lot_count"] * 100
+            total_cost_old = total_shares_old * inv["average_buy_price"]
+            total_shares_new = data.lot_count * 100
+            total_cost_new = total_shares_new * data.average_buy_price
+            
+            inv["lot_count"] += data.lot_count
+            new_shares = (inv["lot_count"] * 100)
+            inv["average_buy_price"] = (total_cost_old + total_cost_new) / new_shares if new_shares > 0 else 0
+            found = True
+            break
+            
+    if not found:
+        investments.append({
+            "id": str(uuid.uuid4()),
+            "ticker": ticker,
+            "lot_count": data.lot_count,
+            "average_buy_price": data.average_buy_price,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        })
+        
+    await db.users.update_one({"id": uid}, {"$set": {"investments": investments}})
+    # Trigger an async price update
+    asyncio.create_task(update_market_prices(user))
+    return {"message": "Investment added", "investments": investments}
+    
+@api_router.delete("/portfolio/investments/{ticker}")
+async def delete_investment(ticker: str, user: dict = Depends(get_current_user)):
+    uid = user["id"]
+    u = await db.users.find_one({"id": uid})
+    investments = [inv for inv in u.get("investments", []) if inv["ticker"] != ticker.upper()]
+    await db.users.update_one({"id": uid}, {"$set": {"investments": investments}})
+    return {"message": "Investment removed"}
 
 # ==================== Export ====================
 @api_router.get("/export/csv")

@@ -1,4 +1,4 @@
-import { Tabs, useRouter } from 'expo-router';
+import { Tabs, useRouter, usePathname } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Platform, View, TouchableOpacity, StyleSheet } from 'react-native';
 import { useTheme } from '../../src/contexts/ThemeContext';
@@ -7,6 +7,9 @@ import { fonts } from '../../src/constants/fonts';
 export default function TabsLayout() {
   const { colors } = useTheme();
   const router = useRouter();
+  const pathname = usePathname();
+
+  const isPortfolio = pathname.includes('portfolio');
 
   return (
     <View style={{ flex: 1 }}>
@@ -28,18 +31,21 @@ export default function TabsLayout() {
       >
         <Tabs.Screen name="index" options={{ title: 'Beranda', tabBarIcon: ({ color, size }) => <Ionicons name="home" size={size} color={color} /> }} />
         <Tabs.Screen name="transactions" options={{ title: 'Transaksi', tabBarIcon: ({ color, size }) => <Ionicons name="receipt" size={size} color={color} /> }} />
+        <Tabs.Screen name="portfolio" options={{ title: 'Investasi', tabBarIcon: ({ color, size }) => <Ionicons name="pie-chart" size={size} color={color} /> }} />
         <Tabs.Screen name="reports" options={{ title: 'Laporan', tabBarIcon: ({ color, size }) => <Ionicons name="stats-chart" size={size} color={color} /> }} />
         <Tabs.Screen name="budget" options={{ title: 'Anggaran', tabBarIcon: ({ color, size }) => <Ionicons name="wallet" size={size} color={color} /> }} />
         <Tabs.Screen name="settings" options={{ title: 'Pengaturan', tabBarIcon: ({ color, size }) => <Ionicons name="settings" size={size} color={color} /> }} />
       </Tabs>
-      <TouchableOpacity
-        testID="global-fab"
-        style={[st.fab, { backgroundColor: colors.accent }]}
-        activeOpacity={0.8}
-        onPress={() => router.push('/add-transaction' as any)}
-      >
-        <Ionicons name="add" size={32} color="#FFF" />
-      </TouchableOpacity>
+      {!isPortfolio && (
+        <TouchableOpacity
+          testID="global-fab"
+          style={[st.fab, { backgroundColor: colors.accent }]}
+          activeOpacity={0.8}
+          onPress={() => router.push('/add-transaction' as any)}
+        >
+          <Ionicons name="add" size={32} color="#FFF" />
+        </TouchableOpacity>
+      )}
     </View>
   );
 }

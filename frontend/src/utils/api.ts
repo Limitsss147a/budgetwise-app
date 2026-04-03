@@ -58,4 +58,9 @@ export const api = {
   getBackup: () => request('/api/export/backup'),
   importBackup: (data: any) => request('/api/import/backup', { method: 'POST', body: JSON.stringify(data) }),
   resetData: () => request('/api/data/reset', { method: 'DELETE' }),
+
+  updateMarketPrices: () => request('/api/portfolio/update-prices', { method: 'POST' }),
+  getNetWorth: () => request('/api/portfolio/net-worth'),
+  addInvestment: (data: { ticker: string, lot_count: number, average_buy_price: number }) => request('/api/portfolio/investments', { method: 'POST', body: JSON.stringify(data) }),
+  deleteInvestment: (ticker: string) => request(`/api/portfolio/investments/${ticker}`, { method: 'DELETE' }),
 };

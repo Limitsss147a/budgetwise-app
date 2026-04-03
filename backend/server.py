@@ -14,6 +14,9 @@ import asyncio
 import httpx
 import random
 import re
+import yfinance as yf
+import requests
+from concurrent.futures import ThreadPoolExecutor
 
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
@@ -535,8 +538,10 @@ async def fetch_google_finance_price(ticker: str) -> Optional[float]:
     return None
 
 async def fetch_stock_price(ticker: str) -> Optional[dict]:
-    """Combined fetch: Google for price (fast/stable), Yahoo for fundamentals."""
-    # Ensure ticker format for Yahoo
+    """
+    Combined fetch using yfinance with browser session (latest) 
+    and Google Finance scraper as fallback.
+    """
     y_ticker = ticker if '.JK' in ticker else f"{ticker}.JK"
     
     result = {
@@ -546,60 +551,45 @@ async def fetch_stock_price(ticker: str) -> Optional[dict]:
         "der": 0.0
     }
 
-    # 1. Try Google Finance for the price (Fastest and most reliable for IDX)
-    g_price = await fetch_google_finance_price(y_ticker)
-    if g_price:
-        result["price"] = g_price
-        logger.info(f"Price for {ticker} fetched from Google: {g_price}")
-
-    # 2. Try Yahoo Finance for Fundamentals (and price fallback)
+    # --- Strategy 1: yfinance with Browser Session ---
     try:
-        ua = random.choice(USER_AGENTS)
-        for domain in ["query1", "query2"]:
-            try:
-                # Use v8 chart for price fallback (lightweight)
-                if not result["price"]:
-                    chart_url = f"https://{domain}.finance.yahoo.com/v8/finance/chart/{y_ticker}?range=1d&interval=1d"
-                    async with httpx.AsyncClient(timeout=10.0, headers={"User-Agent": ua}) as client:
-                        resp = await client.get(chart_url)
-                        if resp.status_code == 200:
-                            data = resp.json()
-                            res = data.get("chart", {}).get("result", [])
-                            if res:
-                                meta = res[0].get("meta", {})
-                                price = meta.get("regularMarketPrice") or meta.get("previousClose")
-                                if price:
-                                    result["price"] = float(price)
-                
-                # Use v10 quoteSummary for Fundamentals
-                summary_url = f"https://{domain}.finance.yahoo.com/v10/finance/quoteSummary/{y_ticker}?modules=defaultKeyStatistics,financialData"
-                async with httpx.AsyncClient(timeout=10.0, headers={"User-Agent": ua}) as client:
-                    resp = await client.get(summary_url)
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        res = data.get("quoteSummary", {}).get("result", [])
-                        if res:
-                            item = res[0]
-                            k = item.get("defaultKeyStatistics", {})
-                            f = item.get("financialData", {})
-                            
-                            def _raw(obj):
-                                if isinstance(obj, dict): return obj.get("raw", 0.0)
-                                return obj or 0.0
+        def _get_yf():
+            session = requests.Session()
+            session.headers.update(random.choice(USER_AGENTS))
+            # Just use the raw User-Agent string from the list
+            ua = random.choice(USER_AGENTS)
+            session.headers.update({"User-Agent": ua})
+            
+            stock = yf.Ticker(y_ticker, session=session)
+            # Use info for everything (slower but comprehensive)
+            info = stock.info
+            
+            price = info.get("regularMarketPrice") or info.get("currentPrice") or info.get("previousClose")
+            pbv = info.get("priceToBook", 0.0)
+            roe = info.get("returnOnEquity", 0.0)
+            der = info.get("debtToEquity", 0.0)
+            
+            return {
+                "price": float(price) if price else None,
+                "pbv": float(pbv) if pbv else 0.0,
+                "roe": float(roe) if roe else 0.0,
+                "der": float(der) if der else 0.0
+            }
 
-                            result["pbv"] = _raw(k.get("priceToBook"))
-                            result["roe"] = _raw(f.get("returnOnEquity"))
-                            result["der"] = _raw(f.get("debtToEquity"))
-                            
-                            logger.info(f"Fundamentals for {ticker} fetched from Yahoo {domain}")
-                            break
-            except Exception as e:
-                logger.warning(f"Yahoo {domain} failed for {ticker}: {str(e)}")
-                continue
+        yf_data = await asyncio.to_thread(_get_yf)
+        if yf_data and yf_data["price"]:
+            result.update(yf_data)
+            logger.info(f"Fetched {ticker} from yfinance: price={result['price']}")
     except Exception as e:
-        logger.error(f"Fundamentals fetch failed for {ticker}: {str(e)}")
+        logger.warning(f"yfinance failed for {ticker}: {str(e)}")
 
-    # Final validation
+    # --- Strategy 2: Google Finance Fallback (Price Only) ---
+    if not result["price"]:
+        g_price = await fetch_google_finance_price(y_ticker)
+        if g_price:
+            result["price"] = g_price
+            logger.info(f"Price for {ticker} fetched from Google: {g_price}")
+
     if not result["price"]:
         logger.error(f"Failed to fetch price for {ticker} from all sources")
         return None

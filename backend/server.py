@@ -10,8 +10,8 @@ from datetime import datetime, timezone, timedelta
 from pydantic import BaseModel
 from typing import Optional, List
 from fastapi.responses import StreamingResponse
-import yfinance as yf
 import asyncio
+import httpx
 
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
@@ -469,84 +469,67 @@ async def remove_pin(user: dict = Depends(get_current_user)):
     return {"message": "PIN dihapus", "has_pin": False}
 
 # ==================== Portfolio & Investments ====================
+YAHOO_QUOTE_URL = "https://query1.finance.yahoo.com/v7/finance/quote"
+YAHOO_HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+
 async def fetch_stock_price(ticker: str) -> Optional[dict]:
-    loop = asyncio.get_event_loop()
-    def _fetch():
-        try:
-            stock = yf.Ticker(ticker)
-            current_price = None
+    """Fetch stock price and fundamentals directly from Yahoo Finance API."""
+    try:
+        url = f"{YAHOO_QUOTE_URL}?symbols={ticker}&fields=regularMarketPrice,regularMarketPreviousClose,priceToBook,returnOnEquity,debtToEquity"
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(url, headers=YAHOO_HEADERS)
+            
+            if resp.status_code != 200:
+                logger.error(f"Yahoo Finance API returned {resp.status_code} for {ticker}")
+                return None
+            
+            data = resp.json()
+            results = data.get("quoteResponse", {}).get("result", [])
+            
+            if not results:
+                logger.warning(f"No quote results for {ticker}")
+                return None
+            
+            q = results[0]
+            
+            current_price = (
+                q.get("regularMarketPrice")
+                or q.get("regularMarketPreviousClose")
+                or q.get("postMarketPrice")
+            )
+            
+            if not current_price:
+                logger.warning(f"No price found in quote for {ticker}")
+                return None
+            
             pbv = 0.0
             roe = 0.0
             der = 0.0
-
-            # --- Strategy 1: Try fast_info first (lightweight) ---
-            try:
-                fi = stock.fast_info
-                if fi and hasattr(fi, 'last_price') and fi.last_price:
-                    current_price = float(fi.last_price)
-                elif fi and hasattr(fi, 'previous_close') and fi.previous_close:
-                    current_price = float(fi.previous_close)
-            except Exception:
-                pass
-
-            # --- Strategy 2: Try info dict ---
-            info = {}
-            try:
-                info = stock.info or {}
-            except Exception:
-                pass
-
-            if not current_price:
-                current_price = (
-                    info.get("currentPrice")
-                    or info.get("regularMarketPrice")
-                    or info.get("regularMarketPreviousClose")
-                    or info.get("previousClose")
-                )
-                if current_price:
-                    current_price = float(current_price)
-
-            # --- Strategy 3: Try history with wider window ---
-            if not current_price:
-                for period in ["5d", "1mo"]:
-                    try:
-                        hist = stock.history(period=period)
-                        if not hist.empty:
-                            current_price = float(hist['Close'].iloc[-1])
-                            break
-                    except Exception:
-                        continue
-
-            if not current_price:
-                logger.warning(f"Could not get price for {ticker}")
-                return None
-
-            # --- Fundamental data from info ---
-            raw_pbv = info.get("priceToBook") or info.get("priceToBookRatio")
+            
+            raw_pbv = q.get("priceToBook")
             if raw_pbv and isinstance(raw_pbv, (int, float)):
                 pbv = float(raw_pbv)
-
-            raw_roe = info.get("returnOnEquity")
+                
+            raw_roe = q.get("returnOnEquity")
             if raw_roe and isinstance(raw_roe, (int, float)):
                 roe = float(raw_roe)
-
-            raw_der = info.get("debtToEquity")
+                
+            raw_der = q.get("debtToEquity")
             if raw_der and isinstance(raw_der, (int, float)):
                 der = float(raw_der)
-
+            
             logger.info(f"Fetched {ticker}: price={current_price}, pbv={pbv}, roe={roe}, der={der}")
             return {
-                "price": current_price,
+                "price": float(current_price),
                 "pbv": pbv,
                 "roe": roe,
                 "der": der
             }
-        except Exception as e:
-            logger.error(f"Error fetching yfinance for {ticker}: {e}")
-            return None
-    return await loop.run_in_executor(None, _fetch)
+    except Exception as e:
+        logger.error(f"Error fetching Yahoo Finance for {ticker}: {e}")
+        return None
 
-# Debug endpoint to test yfinance output for a ticker
+# Debug endpoint to test stock data for a ticker
 @api_router.get("/portfolio/debug/{ticker}")
 async def debug_ticker(ticker: str):
     if not ticker.endswith(".JK"):

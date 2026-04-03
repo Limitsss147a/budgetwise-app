@@ -46,6 +46,7 @@ export default function PortfolioScreen() {
   const [lotInput, setLotInput] = useState('');
   const [priceInput, setPriceInput] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -81,28 +82,68 @@ export default function PortfolioScreen() {
     setModalVisible(true);
   };
 
-  const handleAddInvestment = async () => {
+  const handleSaveInvestment = async () => {
     if (!tickerInput || !lotInput || !priceInput) {
       Alert.alert('Error', 'Harap isi semua field');
       return;
     }
     try {
       setSubmitting(true);
-      await api.addInvestment({
-        ticker: tickerInput,
-        lot_count: parseInt(lotInput),
-        average_buy_price: parseFloat(priceInput)
-      });
+      if (isEditing) {
+        await api.updateInvestment(tickerInput, {
+          lot_count: parseInt(lotInput),
+          average_buy_price: parseFloat(priceInput)
+        });
+      } else {
+        await api.addInvestment({
+          ticker: tickerInput,
+          lot_count: parseInt(lotInput),
+          average_buy_price: parseFloat(priceInput)
+        });
+      }
       setAddModalVisible(false);
       setTickerInput('');
       setLotInput('');
       setPriceInput('');
+      setIsEditing(false);
       loadData(); // refresh
     } catch (e: any) {
       Alert.alert('Error', e.message);
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleEditPress = (stock: Holding) => {
+    setModalVisible(false);
+    setTickerInput(stock.ticker);
+    setLotInput(stock.lot_count.toString());
+    setPriceInput(stock.average_buy_price.toString());
+    setIsEditing(true);
+    setAddModalVisible(true);
+  };
+
+  const handleDeleteInvestment = (ticker: string) => {
+    Alert.alert(
+      'Hapus Investasi',
+      `Apakah Anda yakin ingin menghapus ${ticker} dari portofolio?`,
+      [
+        { text: 'Batal', style: 'cancel' },
+        { 
+          text: 'Hapus', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await api.deleteInvestment(ticker);
+              setModalVisible(false);
+              loadData();
+            } catch (e) {
+              console.error(e);
+            }
+          }
+        }
+      ]
+    );
   };
 
   if (loading) {
@@ -233,6 +274,17 @@ export default function PortfolioScreen() {
                   </View>
                 </View>
 
+                <View style={styles.sheetActions}>
+                  <TouchableOpacity style={[styles.actionBtn, { borderColor: colors.border, borderWidth: 1 }]} onPress={() => handleEditPress(selectedStock)}>
+                    <Ionicons name="create-outline" size={20} color={colors.textSecondary} />
+                    <Text style={[styles.actionBtnText, { color: colors.textSecondary }]}>Edit / Jual</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.actionBtn, { borderColor: '#EF4444', borderWidth: 1 }]} onPress={() => handleDeleteInvestment(selectedStock.ticker)}>
+                    <Ionicons name="trash-outline" size={20} color="#EF4444" />
+                    <Text style={[styles.actionBtnText, { color: '#EF4444' }]}>Hapus</Text>
+                  </TouchableOpacity>
+                </View>
+
                 <TouchableOpacity style={[styles.closeBtn, { backgroundColor: colors.brand }]} onPress={() => setModalVisible(false)}>
                   <Text style={styles.closeBtnText}>Tutup</Text>
                 </TouchableOpacity>
@@ -245,17 +297,18 @@ export default function PortfolioScreen() {
       {/* Add Investment Modal */}
       <Modal visible={addModalVisible} transparent animationType="fade" onRequestClose={() => setAddModalVisible(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlayCenter}>
-          <Pressable style={styles.modalBackdrop} onPress={() => setAddModalVisible(false)} />
+          <Pressable style={styles.modalBackdrop} onPress={() => { setAddModalVisible(false); setIsEditing(false); }} />
           <View style={[styles.dialogContainer, { backgroundColor: colors.bgCard, borderColor: colors.border }]}>
-            <Text style={[styles.dialogTitle, { color: colors.text }]}>Tambah Investasi</Text>
+            <Text style={[styles.dialogTitle, { color: colors.text }]}>{isEditing ? 'Edit Investasi' : 'Tambah Investasi'}</Text>
             
             <TextInput
-              style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]}
+              style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: isEditing ? colors.bgSecondary : colors.bg }]}
               placeholder="Kode Saham (e.g. BBCA)"
               placeholderTextColor={colors.textTertiary}
               value={tickerInput}
               onChangeText={setTickerInput}
               autoCapitalize="characters"
+              editable={!isEditing}
             />
             
             <TextInput
@@ -277,10 +330,10 @@ export default function PortfolioScreen() {
             />
             
             <View style={styles.dialogActions}>
-              <TouchableOpacity style={[styles.dialogBtn, { borderColor: colors.border, borderWidth: 1 }]} onPress={() => setAddModalVisible(false)}>
+              <TouchableOpacity style={[styles.dialogBtn, { borderColor: colors.border, borderWidth: 1 }]} onPress={() => { setAddModalVisible(false); setIsEditing(false); }}>
                 <Text style={[styles.dialogBtnText, { color: colors.textSecondary }]}>Batal</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.dialogBtn, { backgroundColor: colors.brand }]} onPress={handleAddInvestment} disabled={submitting}>
+              <TouchableOpacity style={[styles.dialogBtn, { backgroundColor: colors.brand }]} onPress={handleSaveInvestment} disabled={submitting}>
                 {submitting ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={[styles.dialogBtnText, { color: '#FFF' }]}>Simpan</Text>}
               </TouchableOpacity>
             </View>
@@ -290,7 +343,7 @@ export default function PortfolioScreen() {
 
       <TouchableOpacity
         style={[styles.fabExtended, { backgroundColor: colors.accent }]}
-        onPress={() => setAddModalVisible(true)}
+        onPress={() => { setIsEditing(false); setTickerInput(''); setLotInput(''); setPriceInput(''); setAddModalVisible(true); }}
       >
         <Ionicons name="trending-up" size={24} color="#FFF" />
         <Text style={styles.fabText}>Tambah Saham</Text>
@@ -344,6 +397,10 @@ const styles = StyleSheet.create({
   
   closeBtn: { borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 8 },
   closeBtnText: { color: '#FFF', fontSize: 15, fontFamily: fonts.semiBold },
+
+  sheetActions: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, marginBottom: 16 },
+  actionBtn: { flex: 1, height: 48, borderRadius: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8 },
+  actionBtnText: { fontSize: 14, fontFamily: fonts.bold },
 
   fabExtended: { position: 'absolute', bottom: Platform.OS === 'ios' ? 100 : 80, right: 20, height: 56, borderRadius: 28, paddingHorizontal: 20, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 8 },
   fabText: { color: '#FFF', fontSize: 15, fontFamily: fonts.bold, marginLeft: 8 },

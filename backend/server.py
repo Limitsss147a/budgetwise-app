@@ -469,21 +469,24 @@ async def remove_pin(user: dict = Depends(get_current_user)):
     return {"message": "PIN dihapus", "has_pin": False}
 
 # ==================== Portfolio & Investments ====================
-async def fetch_stock_price(ticker: str):
+async def fetch_stock_price(ticker: str) -> Optional[dict]:
     loop = asyncio.get_event_loop()
     def _fetch():
         try:
             stock = yf.Ticker(ticker)
+            # Use fast_info or info
             hist = stock.history(period="1d")
             if hist.empty:
                 return None
             current_price = float(hist['Close'].iloc[-1])
             info = stock.info
+            
+            # Robust mapping for fundamental data
             return {
                 "price": current_price,
-                "pbv": info.get("priceToBook"),
-                "roe": info.get("returnOnEquity"),
-                "der": info.get("debtToEquity")
+                "pbv": info.get("priceToBook") or info.get("priceToBookRatio") or 0.0,
+                "roe": info.get("returnOnEquity") or 0.0,
+                "der": info.get("debtToEquity") or 0.0
             }
         except Exception as e:
             logger.error(f"Error fetching yfinance for {ticker}: {e}")
@@ -499,13 +502,13 @@ async def update_market_prices(user: dict = Depends(get_current_user)):
     for inv in investments:
         ticker = inv["ticker"]
         data = await fetch_stock_price(ticker)
-        if data:
+        if data and isinstance(data, dict):
             doc = {
                 "ticker": ticker,
-                "price": data["price"],
-                "pbv": data["pbv"],
-                "roe": data["roe"],
-                "der": data["der"],
+                "price": data.get("price", 0.0),
+                "pbv": data.get("pbv", 0.0),
+                "roe": data.get("roe", 0.0),
+                "der": data.get("der", 0.0),
                 "updated_at": datetime.now(timezone.utc).isoformat()
             }
             await db.market_prices.update_one({"ticker": ticker}, {"$set": doc}, upsert=True)
@@ -608,9 +611,43 @@ async def add_investment(data: InvestmentCreate, user: dict = Depends(get_curren
         })
         
     await db.users.update_one({"id": uid}, {"$set": {"investments": investments}})
-    # Trigger an async price update
-    asyncio.create_task(update_market_prices(user))
+    
+    # Immediately fetch price for this ticker to ensure UI has data
+    price_data = await fetch_stock_price(ticker)
+    if price_data and isinstance(price_data, dict):
+        doc = {
+            "ticker": ticker,
+            "price": price_data.get("price", 0.0),
+            "pbv": price_data.get("pbv", 0.0),
+            "roe": price_data.get("roe", 0.0),
+            "der": price_data.get("der", 0.0),
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.market_prices.update_one({"ticker": ticker}, {"$set": doc}, upsert=True)
+
     return {"message": "Investment added", "investments": investments}
+
+@api_router.put("/portfolio/investments/{ticker}")
+async def update_investment(ticker: str, data: InvestmentUpdate, user: dict = Depends(get_current_user)):
+    uid = user["id"]
+    u = await db.users.find_one({"id": uid})
+    investments = u.get("investments", [])
+    
+    found = False
+    for inv in investments:
+        if inv["ticker"] == ticker.upper():
+            if data.lot_count is not None:
+                inv["lot_count"] = data.lot_count
+            if data.average_buy_price is not None:
+                inv["average_buy_price"] = data.average_buy_price
+            found = True
+            break
+            
+    if not found:
+        raise HTTPException(404, "Investment not found")
+        
+    await db.users.update_one({"id": uid}, {"$set": {"investments": investments}})
+    return {"message": "Investment updated", "investments": investments}
     
 @api_router.delete("/portfolio/investments/{ticker}")
 async def delete_investment(ticker: str, user: dict = Depends(get_current_user)):

@@ -496,21 +496,32 @@ async def fetch_google_finance_price(ticker: str) -> Optional[float]:
             match = re.search(r'class="YMlKec fxKbKc">([^<]+)</div>', resp.text)
             if match:
                 price_str = match.group(1)
-                # Clean price string (handle Rp, dots, commas)
-                # IDX format typical: Rp 6.575 or Rp 6.575,00
-                clean = ""
-                for c in price_str:
-                    if c.isdigit(): clean += c
-                    elif c in '.,': clean += '.'
-                
-                if not clean: return None
-                
-                # If there's a decimal, handle it correctly (IDX stocks are usually integers but let's be safe)
-                parts = clean.split('.')
-                if len(parts) > 1 and len(parts[-1]) == 2: # Likely cents
-                    return float("".join(parts[:-1]) + "." + parts[-1])
-                else:
-                    return float("".join(parts))
+                # Clean price string: Rp 6,575.00 or Rp 6.575,00
+                # 1. Remove non-numeric except , and .
+                cleaned = re.sub(r'[^\d.,]', '', price_str)
+                # 2. Heuristic: if both . and , exist, the last one is decimal.
+                # If only one exists, and it's 3 digits from right, it's thousands.
+                # If 2 digits from right, it's decimal.
+                if '.' in cleaned and ',' in cleaned:
+                    dot_idx = cleaned.rfind('.')
+                    comma_idx = cleaned.rfind(',')
+                    if dot_idx > comma_idx: # Dot is decimal
+                        return float(cleaned.replace(',', ''))
+                    else: # Comma is decimal
+                        return float(cleaned.replace('.', '').replace(',', '.'))
+                elif '.' in cleaned:
+                    parts = cleaned.split('.')
+                    if len(parts[-1]) == 2: # Decimal
+                        return float(cleaned)
+                    else: # Thousands
+                        return float(cleaned.replace('.', ''))
+                elif ',' in cleaned:
+                    parts = cleaned.split(',')
+                    if len(parts[-1]) == 2: # Decimal
+                        return float(cleaned.replace(',', '.'))
+                    else: # Thousands
+                        return float(cleaned.replace(',', ''))
+                return float(cleaned) if cleaned else None
     except Exception as e:
         logger.warning(f"Google Finance scrape failed for {ticker}: {e}")
     return None

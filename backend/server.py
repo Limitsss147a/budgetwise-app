@@ -12,6 +12,8 @@ from typing import Optional, List
 from fastapi.responses import StreamingResponse
 import asyncio
 import httpx
+import random
+import re
 
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
@@ -469,8 +471,14 @@ async def remove_pin(user: dict = Depends(get_current_user)):
     return {"message": "PIN dihapus", "has_pin": False}
 
 # ==================== Portfolio & Investments ====================
-# ==================== Portfolio & Investments ====================
 # Headers to mimic a real browser to avoid blocks
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1"
+]
+
 SCREAPER_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
@@ -546,13 +554,13 @@ async def fetch_stock_price(ticker: str) -> Optional[dict]:
 
     # 2. Try Yahoo Finance for Fundamentals (and price fallback)
     try:
-        # Rotate between query1 and query2 to avoid rate limits
+        ua = random.choice(USER_AGENTS)
         for domain in ["query1", "query2"]:
             try:
                 # Use v8 chart for price fallback (lightweight)
                 if not result["price"]:
                     chart_url = f"https://{domain}.finance.yahoo.com/v8/finance/chart/{y_ticker}?range=1d&interval=1d"
-                    async with httpx.AsyncClient(timeout=10.0, headers=SCREAPER_HEADERS) as client:
+                    async with httpx.AsyncClient(timeout=10.0, headers={"User-Agent": ua}) as client:
                         resp = await client.get(chart_url)
                         if resp.status_code == 200:
                             data = resp.json()
@@ -565,7 +573,7 @@ async def fetch_stock_price(ticker: str) -> Optional[dict]:
                 
                 # Use v10 quoteSummary for Fundamentals
                 summary_url = f"https://{domain}.finance.yahoo.com/v10/finance/quoteSummary/{y_ticker}?modules=defaultKeyStatistics,financialData"
-                async with httpx.AsyncClient(timeout=10.0, headers=SCREAPER_HEADERS) as client:
+                async with httpx.AsyncClient(timeout=10.0, headers={"User-Agent": ua}) as client:
                     resp = await client.get(summary_url)
                     if resp.status_code == 200:
                         data = resp.json()
@@ -583,13 +591,13 @@ async def fetch_stock_price(ticker: str) -> Optional[dict]:
                             result["roe"] = _raw(f.get("returnOnEquity"))
                             result["der"] = _raw(f.get("debtToEquity"))
                             
-                            logger.info(f"Fundamentals for {ticker} fetched from Yahoo: PBV={result['pbv']}")
-                            break # Found data, skip next domain
+                            logger.info(f"Fundamentals for {ticker} fetched from Yahoo {domain}")
+                            break
             except Exception as e:
-                logger.warning(f"Yahoo {domain} failed for {ticker}: {e}")
+                logger.warning(f"Yahoo {domain} failed for {ticker}: {str(e)}")
                 continue
     except Exception as e:
-        logger.error(f"Fundamentals fetch failed for {ticker}: {e}")
+        logger.error(f"Fundamentals fetch failed for {ticker}: {str(e)}")
 
     # Final validation
     if not result["price"]:

@@ -474,24 +474,85 @@ async def fetch_stock_price(ticker: str) -> Optional[dict]:
     def _fetch():
         try:
             stock = yf.Ticker(ticker)
-            # Use fast_info or info
-            hist = stock.history(period="1d")
-            if hist.empty:
+            current_price = None
+            pbv = 0.0
+            roe = 0.0
+            der = 0.0
+
+            # --- Strategy 1: Try fast_info first (lightweight) ---
+            try:
+                fi = stock.fast_info
+                if fi and hasattr(fi, 'last_price') and fi.last_price:
+                    current_price = float(fi.last_price)
+                elif fi and hasattr(fi, 'previous_close') and fi.previous_close:
+                    current_price = float(fi.previous_close)
+            except Exception:
+                pass
+
+            # --- Strategy 2: Try info dict ---
+            info = {}
+            try:
+                info = stock.info or {}
+            except Exception:
+                pass
+
+            if not current_price:
+                current_price = (
+                    info.get("currentPrice")
+                    or info.get("regularMarketPrice")
+                    or info.get("regularMarketPreviousClose")
+                    or info.get("previousClose")
+                )
+                if current_price:
+                    current_price = float(current_price)
+
+            # --- Strategy 3: Try history with wider window ---
+            if not current_price:
+                for period in ["5d", "1mo"]:
+                    try:
+                        hist = stock.history(period=period)
+                        if not hist.empty:
+                            current_price = float(hist['Close'].iloc[-1])
+                            break
+                    except Exception:
+                        continue
+
+            if not current_price:
+                logger.warning(f"Could not get price for {ticker}")
                 return None
-            current_price = float(hist['Close'].iloc[-1])
-            info = stock.info
-            
-            # Robust mapping for fundamental data
+
+            # --- Fundamental data from info ---
+            raw_pbv = info.get("priceToBook") or info.get("priceToBookRatio")
+            if raw_pbv and isinstance(raw_pbv, (int, float)):
+                pbv = float(raw_pbv)
+
+            raw_roe = info.get("returnOnEquity")
+            if raw_roe and isinstance(raw_roe, (int, float)):
+                roe = float(raw_roe)
+
+            raw_der = info.get("debtToEquity")
+            if raw_der and isinstance(raw_der, (int, float)):
+                der = float(raw_der)
+
+            logger.info(f"Fetched {ticker}: price={current_price}, pbv={pbv}, roe={roe}, der={der}")
             return {
                 "price": current_price,
-                "pbv": info.get("priceToBook") or info.get("priceToBookRatio") or 0.0,
-                "roe": info.get("returnOnEquity") or 0.0,
-                "der": info.get("debtToEquity") or 0.0
+                "pbv": pbv,
+                "roe": roe,
+                "der": der
             }
         except Exception as e:
             logger.error(f"Error fetching yfinance for {ticker}: {e}")
             return None
     return await loop.run_in_executor(None, _fetch)
+
+# Debug endpoint to test yfinance output for a ticker
+@api_router.get("/portfolio/debug/{ticker}")
+async def debug_ticker(ticker: str):
+    if not ticker.endswith(".JK"):
+        ticker += ".JK"
+    result = await fetch_stock_price(ticker)
+    return {"ticker": ticker, "result": result}
 
 @api_router.post("/portfolio/update-prices")
 async def update_market_prices(user: dict = Depends(get_current_user)):

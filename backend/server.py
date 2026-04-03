@@ -469,55 +469,121 @@ async def remove_pin(user: dict = Depends(get_current_user)):
     return {"message": "PIN dihapus", "has_pin": False}
 
 # ==================== Portfolio & Investments ====================
-YAHOO_QUOTE_URL = "https://query1.finance.yahoo.com/v7/finance/quote"
-YAHOO_HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+YAHOO_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept": "application/json",
+}
+
+async def _get_yahoo_crumb(client: httpx.AsyncClient) -> tuple:
+    """Get Yahoo Finance crumb + cookies for authenticated API calls."""
+    try:
+        resp = await client.get("https://fc.yahoo.com/", follow_redirects=True)
+        cookies = resp.cookies
+        crumb_resp = await client.get(
+            "https://query2.finance.yahoo.com/v1/test/getcrumb",
+            cookies=cookies
+        )
+        return crumb_resp.text, cookies
+    except Exception:
+        return None, None
 
 async def fetch_stock_price(ticker: str) -> Optional[dict]:
-    """Fetch stock price and fundamentals directly from Yahoo Finance API."""
+    """Fetch stock price and fundamentals from Yahoo Finance with multiple strategies."""
     try:
-        url = f"{YAHOO_QUOTE_URL}?symbols={ticker}&fields=regularMarketPrice,regularMarketPreviousClose,priceToBook,returnOnEquity,debtToEquity"
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.get(url, headers=YAHOO_HEADERS)
-            
-            if resp.status_code != 200:
-                logger.error(f"Yahoo Finance API returned {resp.status_code} for {ticker}")
-                return None
-            
-            data = resp.json()
-            results = data.get("quoteResponse", {}).get("result", [])
-            
-            if not results:
-                logger.warning(f"No quote results for {ticker}")
-                return None
-            
-            q = results[0]
-            
-            current_price = (
-                q.get("regularMarketPrice")
-                or q.get("regularMarketPreviousClose")
-                or q.get("postMarketPrice")
-            )
-            
-            if not current_price:
-                logger.warning(f"No price found in quote for {ticker}")
-                return None
-            
+        async with httpx.AsyncClient(timeout=20.0, headers=YAHOO_HEADERS, follow_redirects=True) as client:
+            current_price = None
             pbv = 0.0
             roe = 0.0
             der = 0.0
-            
-            raw_pbv = q.get("priceToBook")
-            if raw_pbv and isinstance(raw_pbv, (int, float)):
-                pbv = float(raw_pbv)
-                
-            raw_roe = q.get("returnOnEquity")
-            if raw_roe and isinstance(raw_roe, (int, float)):
-                roe = float(raw_roe)
-                
-            raw_der = q.get("debtToEquity")
-            if raw_der and isinstance(raw_der, (int, float)):
-                der = float(raw_der)
-            
+
+            # Get crumb for authenticated requests
+            crumb, cookies = await _get_yahoo_crumb(client)
+
+            # --- Strategy 1: v8 chart API (most reliable) ---
+            try:
+                chart_url = f"https://query2.finance.yahoo.com/v8/finance/chart/{ticker}?range=5d&interval=1d"
+                if crumb:
+                    chart_url += f"&crumb={crumb}"
+                resp = await client.get(chart_url, cookies=cookies)
+                if resp.status_code == 200:
+                    chart_data = resp.json()
+                    chart_result = chart_data.get("chart", {}).get("result", [])
+                    if chart_result:
+                        meta = chart_result[0].get("meta", {})
+                        current_price = meta.get("regularMarketPrice") or meta.get("previousClose")
+                        if current_price:
+                            current_price = float(current_price)
+            except Exception as e:
+                logger.warning(f"Chart API failed for {ticker}: {e}")
+
+            # --- Strategy 2: v7 quote API ---
+            if not current_price:
+                try:
+                    quote_url = f"https://query2.finance.yahoo.com/v7/finance/quote?symbols={ticker}"
+                    if crumb:
+                        quote_url += f"&crumb={crumb}"
+                    resp = await client.get(quote_url, cookies=cookies)
+                    if resp.status_code == 200:
+                        q_data = resp.json()
+                        results = q_data.get("quoteResponse", {}).get("result", [])
+                        if results:
+                            q = results[0]
+                            current_price = q.get("regularMarketPrice") or q.get("regularMarketPreviousClose")
+                            if current_price:
+                                current_price = float(current_price)
+                            # Also grab fundamentals here
+                            raw = q.get("priceToBook")
+                            if raw and isinstance(raw, (int, float)):
+                                pbv = float(raw)
+                except Exception as e:
+                    logger.warning(f"Quote API failed for {ticker}: {e}")
+
+            # --- Strategy 3: v10 quoteSummary for fundamentals ---
+            try:
+                modules = "price,defaultKeyStatistics,financialData"
+                summary_url = f"https://query2.finance.yahoo.com/v10/finance/quoteSummary/{ticker}?modules={modules}"
+                if crumb:
+                    summary_url += f"&crumb={crumb}"
+                resp = await client.get(summary_url, cookies=cookies)
+                if resp.status_code == 200:
+                    s_data = resp.json()
+                    s_result = s_data.get("quoteSummary", {}).get("result", [])
+                    if s_result:
+                        item = s_result[0]
+                        
+                        # Price fallback
+                        if not current_price:
+                            price_section = item.get("price", {})
+                            rmp = price_section.get("regularMarketPrice", {})
+                            current_price = rmp.get("raw") if isinstance(rmp, dict) else rmp
+                            if current_price:
+                                current_price = float(current_price)
+                        
+                        # Fundamentals
+                        key_stats = item.get("defaultKeyStatistics", {})
+                        fin_data = item.get("financialData", {})
+                        
+                        raw_pbv = key_stats.get("priceToBook", {})
+                        val = raw_pbv.get("raw") if isinstance(raw_pbv, dict) else raw_pbv
+                        if val and isinstance(val, (int, float)):
+                            pbv = float(val)
+                        
+                        raw_roe = fin_data.get("returnOnEquity", {})
+                        val = raw_roe.get("raw") if isinstance(raw_roe, dict) else raw_roe
+                        if val and isinstance(val, (int, float)):
+                            roe = float(val)
+                        
+                        raw_der = fin_data.get("debtToEquity", {})
+                        val = raw_der.get("raw") if isinstance(raw_der, dict) else raw_der
+                        if val and isinstance(val, (int, float)):
+                            der = float(val)
+            except Exception as e:
+                logger.warning(f"QuoteSummary API failed for {ticker}: {e}")
+
+            if not current_price:
+                logger.error(f"All strategies failed for {ticker}")
+                return None
+
             logger.info(f"Fetched {ticker}: price={current_price}, pbv={pbv}, roe={roe}, der={der}")
             return {
                 "price": float(current_price),

@@ -46,3 +46,8 @@ export function getMonthOffset(monthStr: string, offset: number): string {
   while (newMonth > 12) { newMonth -= 12; newYear++; }
   return `${newYear}-${String(newMonth).padStart(2, '0')}`;
 }
+
+export function formatPercentage(value: number): string {
+  const sign = value >= 0 ? "+" : "";
+  return `${sign}${value.toFixed(2)}%`;
+}

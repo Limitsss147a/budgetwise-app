@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl, Modal, Pressable, TextInput, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl, Modal, Pressable, TextInput, Alert, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
@@ -7,6 +7,8 @@ import { api } from '../../src/utils/api';
 import { formatRupiah } from '../../src/utils/format';
 import { useTheme } from '../../src/contexts/ThemeContext';
 import { fonts } from '../../src/constants/fonts';
+import { StockPortfolioTable } from '../../src/components/ui/StockPortfolioTable';
+import { formatPercentage } from '../../src/utils/format';
 
 interface Holding {
   ticker: string;
@@ -156,29 +158,21 @@ export default function PortfolioScreen() {
     );
   }
 
-  const renderItem = ({ item }: { item: Holding }) => {
-    const isProfit = item.unrealized_pl >= 0;
-    const plColor = isProfit ? '#10B981' : '#EF4444'; // Emerald green vs Red
-    
+  const renderHoldingsTable = () => {
+    const stocks = data?.holdings.map(h => ({
+      ...h,
+      id: h.ticker, // Map ticker to id
+    })) || [];
+
     return (
-      <TouchableOpacity 
-        style={[styles.stockCard, { backgroundColor: colors.bgCard, borderColor: colors.border }]}
-        activeOpacity={0.7}
-        onPress={() => openSheet(item)}
-      >
-        <View style={styles.stockRow}>
-          <View>
-            <Text style={[styles.tickerText, { color: colors.text }]}>{item.ticker}</Text>
-            <Text style={[styles.lotText, { color: colors.textSecondary }]}>{item.lot_count} lot • Avg: {formatRupiah(item.average_buy_price)}</Text>
-          </View>
-          <View style={styles.alignRight}>
-            <Text style={[styles.valueText, { color: colors.text }]}>{formatRupiah(item.total_value)}</Text>
-            <Text style={[styles.plText, { color: plColor }]}>
-              {isProfit ? '+' : ''}{formatRupiah(item.unrealized_pl)} ({isProfit ? '+' : ''}{item.unrealized_pl_percentage.toFixed(2)}%)
-            </Text>
-          </View>
-        </View>
-      </TouchableOpacity>
+      <View style={{ marginTop: 24 }}>
+        <Text style={[styles.sectionTitle, { color: colors.text, paddingHorizontal: 20 }]}>Daftar Aset</Text>
+        <StockPortfolioTable 
+          stocks={stocks}
+          colors={colors}
+          onStockSelect={openSheet}
+        />
+      </View>
     );
   };
 
@@ -191,50 +185,49 @@ export default function PortfolioScreen() {
         </TouchableOpacity>
       </View>
 
-      <FlatList
-        data={data?.holdings || []}
-        keyExtractor={item => item.ticker}
+      <ScrollView 
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: 120 }}
+        showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} tintColor={colors.brand} />}
-        contentContainerStyle={styles.listContent}
-        ListHeaderComponent={
-          <>
-            <View style={[styles.netWorthCard, { backgroundColor: colors.brand }]}>
-              <Text style={styles.nwLabel}>Kekayaan Bersih (Net Worth)</Text>
-              <Text style={styles.nwAmount}>{formatRupiah(data?.total_asset_value || 0)}</Text>
-              
-              <View style={styles.nwDivider} />
-              
-              <View style={styles.nwRow}>
-                <View style={styles.nwItem}>
-                  <Text style={styles.nwItemLabel}>Aset Likuid</Text>
-                  <Text style={styles.nwItemVal}>{formatRupiah(data?.liquid_asset || 0)}</Text>
-                </View>
-                <View style={[styles.nwItem, { alignItems: 'flex-end' }]}>
-                  <Text style={styles.nwItemLabel}>Aset Investasi</Text>
-                  <Text style={styles.nwItemVal}>{formatRupiah(data?.total_investment_value || 0)}</Text>
-                </View>
+      >
+        <View style={{ paddingHorizontal: 20 }}>
+          <View style={[styles.netWorthCard, { backgroundColor: colors.brand }]}>
+            <Text style={styles.nwLabel}>Kekayaan Bersih (Net Worth)</Text>
+            <Text style={styles.nwAmount}>{formatRupiah(data?.total_asset_value || 0)}</Text>
+            
+            <View style={styles.nwDivider} />
+            
+            <View style={styles.nwRow}>
+              <View style={styles.nwItem}>
+                <Text style={styles.nwItemLabel}>Aset Likuid</Text>
+                <Text style={styles.nwItemVal}>{formatRupiah(data?.liquid_asset || 0)}</Text>
               </View>
-              
-              <View style={{ marginTop: 16, alignItems: 'center' }}>
-                <Text style={styles.nwItemLabel}>Total Unrealized P/L</Text>
-                <Text style={[styles.nwItemVal, { color: (data?.total_unrealized_pl || 0) >= 0 ? '#A8F0C6' : '#FFB4B4' }]}>
-                  {(data?.total_unrealized_pl || 0) >= 0 ? '+' : ''}{formatRupiah(data?.total_unrealized_pl || 0)} ({(data?.total_unrealized_pl_percentage || 0).toFixed(2)}%)
-                </Text>
+              <View style={[styles.nwItem, { alignItems: 'flex-end' }]}>
+                <Text style={styles.nwItemLabel}>Aset Investasi</Text>
+                <Text style={styles.nwItemVal}>{formatRupiah(data?.total_investment_value || 0)}</Text>
               </View>
             </View>
+            
+            <View style={{ marginTop: 16, alignItems: 'center' }}>
+              <Text style={styles.nwItemLabel}>Total Unrealized P/L</Text>
+              <Text style={[styles.nwItemVal, { color: (data?.total_unrealized_pl || 0) >= 0 ? '#A8F0C6' : '#FFB4B4' }]}>
+                {(data?.total_unrealized_pl || 0) >= 0 ? '+' : ''}{formatRupiah(data?.total_unrealized_pl || 0)} ({(data?.total_unrealized_pl_percentage || 0).toFixed(2)}%)
+              </Text>
+            </View>
+          </View>
+        </View>
 
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Daftar Aset</Text>
-          </>
-        }
-        ListEmptyComponent={
+        {(!data?.holdings || data.holdings.length === 0) ? (
           <View style={styles.empty}>
             <Ionicons name="trending-up-outline" size={48} color={colors.textTertiary} />
             <Text style={[styles.emptyTitle, { color: colors.text }]}>Belum ada investasi</Text>
             <Text style={[styles.emptySub, { color: colors.textTertiary }]}>Mulai masukkan emiten sahammu!</Text>
           </View>
-        }
-        renderItem={renderItem}
-      />
+        ) : (
+          renderHoldingsTable()
+        )}
+      </ScrollView>
 
       {/* Detail Bottom Sheet */}
       <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={() => setModalVisible(false)}>
@@ -257,18 +250,6 @@ export default function PortfolioScreen() {
                     <Text style={[styles.metricVal, { color: colors.text }]}>{formatRupiah(selectedStock.average_buy_price)}</Text>
                   </View>
                   <View style={[styles.metricBox, { backgroundColor: colors.bg, borderColor: colors.border }]}>
-                    <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>PBV</Text>
-                    <Text style={[styles.metricVal, { color: colors.text }]}>{selectedStock.pbv ? selectedStock.pbv.toFixed(2) : '-'}</Text>
-                  </View>
-                  <View style={[styles.metricBox, { backgroundColor: colors.bg, borderColor: colors.border }]}>
-                    <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>ROE</Text>
-                    <Text style={[styles.metricVal, { color: colors.text }]}>{selectedStock.roe ? (selectedStock.roe * 100).toFixed(2) + '%' : '-'}</Text>
-                  </View>
-                  <View style={[styles.metricBox, { backgroundColor: colors.bg, borderColor: colors.border }]}>
-                    <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>DER</Text>
-                    <Text style={[styles.metricVal, { color: colors.text }]}>{selectedStock.der ? selectedStock.der.toFixed(2) : '-'}</Text>
-                  </View>
-                  <View style={[styles.metricBox, { backgroundColor: colors.bg, borderColor: colors.border }]}>
                     <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>Total Lot</Text>
                     <Text style={[styles.metricVal, { color: colors.text }]}>{selectedStock.lot_count}</Text>
                   </View>
@@ -277,7 +258,7 @@ export default function PortfolioScreen() {
                 <View style={styles.sheetActions}>
                   <TouchableOpacity style={[styles.actionBtn, { borderColor: colors.border, borderWidth: 1 }]} onPress={() => handleEditPress(selectedStock)}>
                     <Ionicons name="create-outline" size={20} color={colors.textSecondary} />
-                    <Text style={[styles.actionBtnText, { color: colors.textSecondary }]}>Edit / Jual</Text>
+                    <Text style={[styles.actionBtnText, { color: colors.textSecondary }]}>Edit</Text>
                   </TouchableOpacity>
                   <TouchableOpacity style={[styles.actionBtn, { borderColor: '#EF4444', borderWidth: 1 }]} onPress={() => handleDeleteInvestment(selectedStock.ticker)}>
                     <Ionicons name="trash-outline" size={20} color="#EF4444" />
@@ -402,7 +383,7 @@ const styles = StyleSheet.create({
   actionBtn: { flex: 1, height: 48, borderRadius: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8 },
   actionBtnText: { fontSize: 14, fontFamily: fonts.bold },
 
-  fabExtended: { position: 'absolute', bottom: Platform.OS === 'ios' ? 100 : 80, right: 20, height: 56, borderRadius: 28, paddingHorizontal: 20, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 8 },
+  fabExtended: { position: 'absolute', bottom: Platform.OS === 'ios' ? 30 : 20, right: 20, height: 56, borderRadius: 28, paddingHorizontal: 20, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 8 },
   fabText: { color: '#FFF', fontSize: 15, fontFamily: fonts.bold, marginLeft: 8 },
   
   modalOverlayCenter: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },

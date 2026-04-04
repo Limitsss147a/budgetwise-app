@@ -738,7 +738,7 @@ async def add_investment(data: InvestmentCreate, user: dict = Depends(get_curren
 
     return {"message": "Investment added", "investments": investments}
 
-@api_router.put("/portfolio/investments/{ticker}")
+@api_router.put("/portfolio/investments/{ticker:path}")
 async def update_investment(ticker: str, data: InvestmentUpdate, user: dict = Depends(get_current_user)):
     uid = user["id"]
     u = await db.users.find_one({"id": uid})
@@ -761,7 +761,7 @@ async def update_investment(ticker: str, data: InvestmentUpdate, user: dict = De
     await db.users.update_one({"id": uid}, {"$set": {"investments": investments}})
     return {"message": "Investment updated", "investments": investments}
     
-@api_router.delete("/portfolio/investments/{ticker}")
+@api_router.delete("/portfolio/investments/{ticker:path}")
 async def delete_investment(ticker: str, user: dict = Depends(get_current_user)):
     uid = user["id"]
     target_ticker = ticker.upper().strip()

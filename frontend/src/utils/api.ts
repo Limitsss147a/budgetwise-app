@@ -62,6 +62,6 @@ export const api = {
   updateMarketPrices: () => request('/api/portfolio/update-prices', { method: 'POST' }),
   getNetWorth: () => request('/api/portfolio/net-worth'),
   addInvestment: (data: { ticker: string, lot_count: number, average_buy_price: number }) => request('/api/portfolio/investments', { method: 'POST', body: JSON.stringify(data) }),
-  updateInvestment: (ticker: string, data: { lot_count?: number, average_buy_price?: number }) => request(`/api/portfolio/investments/${ticker}`, { method: 'PUT', body: JSON.stringify(data) }),
-  deleteInvestment: (ticker: string) => request(`/api/portfolio/investments/${ticker}`, { method: 'DELETE' }),
+  updateInvestment: (ticker: string, data: { lot_count?: number, average_buy_price?: number }) => request(`/api/portfolio/investments/${encodeURIComponent(ticker)}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteInvestment: (ticker: string) => request(`/api/portfolio/investments/${encodeURIComponent(ticker)}`, { method: 'DELETE' }),
 };

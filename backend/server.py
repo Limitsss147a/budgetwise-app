@@ -122,9 +122,9 @@ class InvestmentCreate(BaseModel):
     average_buy_price: float
 
 class InvestmentUpdate(BaseModel):
-    ticker: str
-    lot_count: Optional[int]
-    average_buy_price: Optional[float]
+    ticker: Optional[str] = None
+    lot_count: Optional[int] = None
+    average_buy_price: Optional[float] = None
 
 # ==================== Default Categories ====================
 DEFAULT_CATEGORIES = [
@@ -691,8 +691,8 @@ async def get_net_worth(user: dict = Depends(get_current_user)):
 @api_router.post("/portfolio/investments")
 async def add_investment(data: InvestmentCreate, user: dict = Depends(get_current_user)):
     uid = user["id"]
-    ticker = data.ticker.upper()
-    if not ticker.endswith(".JK"):
+    ticker = data.ticker.upper().strip()
+    if ticker and not ticker.endswith(".JK"):
         ticker += ".JK"
         
     u = await db.users.find_one({"id": uid})
@@ -745,8 +745,9 @@ async def update_investment(ticker: str, data: InvestmentUpdate, user: dict = De
     investments = u.get("investments", [])
     
     found = False
+    target_ticker = ticker.upper().strip()
     for inv in investments:
-        if inv["ticker"] == ticker.upper():
+        if inv["ticker"] == target_ticker:
             if data.lot_count is not None:
                 inv["lot_count"] = data.lot_count
             if data.average_buy_price is not None:
@@ -763,8 +764,9 @@ async def update_investment(ticker: str, data: InvestmentUpdate, user: dict = De
 @api_router.delete("/portfolio/investments/{ticker}")
 async def delete_investment(ticker: str, user: dict = Depends(get_current_user)):
     uid = user["id"]
+    target_ticker = ticker.upper().strip()
     u = await db.users.find_one({"id": uid})
-    investments = [inv for inv in u.get("investments", []) if inv["ticker"] != ticker.upper()]
+    investments = [inv for inv in u.get("investments", []) if inv["ticker"] != target_ticker]
     await db.users.update_one({"id": uid}, {"$set": {"investments": investments}})
     return {"message": "Investment removed"}
 

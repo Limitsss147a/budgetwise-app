@@ -94,16 +94,20 @@ export default function PortfolioScreen() {
     }
     try {
       setSubmitting(true);
+      const cleanTicker = tickerInput.trim().toUpperCase();
+      const cleanLot = parseInt(lotInput.replace(/\D/g, '') || '0');
+      const cleanPrice = parseFloat(priceInput.replace(/[^\d.]/g, '') || '0'); // Allow dot but remove others
+      
       if (isEditing) {
-        await api.updateInvestment(tickerInput, {
-          lot_count: parseInt(lotInput),
-          average_buy_price: parseFloat(priceInput)
+        await api.updateInvestment(cleanTicker, {
+          lot_count: cleanLot,
+          average_buy_price: cleanPrice
         });
       } else {
         await api.addInvestment({
-          ticker: tickerInput,
-          lot_count: parseInt(lotInput),
-          average_buy_price: parseFloat(priceInput)
+          ticker: cleanTicker,
+          lot_count: cleanLot,
+          average_buy_price: cleanPrice
         });
       }
       setAddModalVisible(false);
@@ -111,9 +115,9 @@ export default function PortfolioScreen() {
       setLotInput('');
       setPriceInput('');
       setIsEditing(false);
-      loadData(); // refresh
+      await loadData(); // refresh
     } catch (e: any) {
-      Alert.alert('Error', e.message);
+      Alert.alert('Error', e.message || 'Terjadi kesalahan saat menyimpan data');
     } finally {
       setSubmitting(false);
     }
@@ -141,9 +145,9 @@ export default function PortfolioScreen() {
             try {
               await api.deleteInvestment(ticker);
               setModalVisible(false);
-              loadData();
-            } catch (e) {
-              console.error(e);
+              await loadData();
+            } catch (e: any) {
+              Alert.alert('Error', e.message || 'Gagal menghapus saham');
             }
           }
         }

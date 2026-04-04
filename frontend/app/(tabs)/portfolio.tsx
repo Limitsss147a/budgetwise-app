@@ -52,6 +52,8 @@ export default function PortfolioScreen() {
   const [priceInput, setPriceInput] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [pendingDeleteTicker, setPendingDeleteTicker] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -132,27 +134,29 @@ export default function PortfolioScreen() {
     setAddModalVisible(true);
   };
 
-  const handleDeleteInvestment = (ticker: string) => {
-    Alert.alert(
-      'Hapus Investasi',
-      `Apakah Anda yakin ingin menghapus ${ticker} dari portofolio?`,
-      [
-        { text: 'Batal', style: 'cancel' },
-        { 
-          text: 'Hapus', 
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await api.deleteInvestment(ticker);
-              setModalVisible(false);
-              await loadData();
-            } catch (e: any) {
-              Alert.alert('Error', e.message || 'Gagal menghapus saham');
-            }
-          }
-        }
-      ]
-    );
+  // On Android, Alert.alert won't render while a Modal is open.
+  // Solution: close the modal first, then fire the alert after the close animation.
+  const handleDeletePress = (ticker: string) => {
+    setPendingDeleteTicker(ticker);
+    setModalVisible(false);
+  };
+
+  const confirmDelete = async () => {
+    if (!pendingDeleteTicker) return;
+    try {
+      setIsDeleting(true);
+      await api.deleteInvestment(pendingDeleteTicker);
+      setPendingDeleteTicker(null);
+      await loadData();
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Gagal menghapus saham');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const cancelDelete = () => {
+    setPendingDeleteTicker(null);
   };
 
   if (loading) return <LoadingScreen />;
@@ -285,7 +289,7 @@ export default function PortfolioScreen() {
                     <Ionicons name="create-outline" size={20} color={colors.textSecondary} />
                     <Text style={[styles.actionBtnText, { color: colors.textSecondary }]}>Edit</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={[styles.actionBtn, { borderColor: '#EF4444', borderWidth: 1 }]} onPress={() => handleDeleteInvestment(selectedStock.ticker)}>
+                  <TouchableOpacity style={[styles.actionBtn, { borderColor: '#EF4444', borderWidth: 1 }]} onPress={() => handleDeletePress(selectedStock.ticker)}>
                     <Ionicons name="trash-outline" size={20} color="#EF4444" />
                     <Text style={[styles.actionBtnText, { color: '#EF4444' }]}>Hapus</Text>
                   </TouchableOpacity>
@@ -345,6 +349,34 @@ export default function PortfolioScreen() {
             </View>
           </View>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Confirm Delete Dialog - must be outside bottom sheet Modal to work on Android */}
+      <Modal visible={!!pendingDeleteTicker} transparent animationType="fade" onRequestClose={cancelDelete}>
+        <View style={styles.modalOverlayCenter}>
+          <Pressable style={styles.modalBackdrop} onPress={cancelDelete} />
+          <View style={[styles.dialogContainer, { backgroundColor: colors.bgCard, borderColor: colors.border }]}>
+            <View style={{ alignItems: 'center', marginBottom: 16 }}>
+              <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: 'rgba(239,68,68,0.15)', justifyContent: 'center', alignItems: 'center', marginBottom: 12 }}>
+                <Ionicons name="trash-outline" size={26} color="#EF4444" />
+              </View>
+              <Text style={[styles.dialogTitle, { color: colors.text, marginBottom: 8 }]}>Hapus Investasi</Text>
+              <Text style={{ color: colors.textSecondary, fontFamily: fonts.regular, fontSize: 14, textAlign: 'center' }}>
+                Apakah Anda yakin ingin menghapus{'\n'}
+                <Text style={{ fontFamily: fonts.bold, color: '#EF4444' }}>{pendingDeleteTicker?.replace('.JK','')}</Text>
+                {' '}dari portofolio?
+              </Text>
+            </View>
+            <View style={styles.dialogActions}>
+              <TouchableOpacity style={[styles.dialogBtn, { borderColor: colors.border, borderWidth: 1 }]} onPress={cancelDelete} disabled={isDeleting}>
+                <Text style={[styles.dialogBtnText, { color: colors.textSecondary }]}>Batal</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.dialogBtn, { backgroundColor: '#EF4444' }]} onPress={confirmDelete} disabled={isDeleting}>
+                {isDeleting ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={[styles.dialogBtnText, { color: '#FFF' }]}>Hapus</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </Modal>
 
       <TouchableOpacity

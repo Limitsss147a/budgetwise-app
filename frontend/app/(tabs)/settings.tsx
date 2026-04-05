@@ -1,8 +1,8 @@
 import { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, TextInput, Switch, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, TextInput, Switch, ActivityIndicator, Platform, Modal, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { api } from '../../src/utils/api';
 import { useTheme } from '../../src/contexts/ThemeContext';
 import { useAuth } from '../../src/contexts/AuthContext';
@@ -11,6 +11,7 @@ import { requestNotificationPermissions, scheduleWeeklyReport, cancelWeeklyRepor
 import type { Settings } from '../../src/types';
 
 export default function SettingsScreen() {
+  const router = useRouter();
   const { colors, theme, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -21,6 +22,8 @@ export default function SettingsScreen() {
   const [weeklyEnabled, setWeeklyEnabled] = useState(false);
   const [weeklyDay, setWeeklyDay] = useState(1);
   const [weeklyHour, setWeeklyHour] = useState(9);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const loadSettings = useCallback(async () => {
     try {
@@ -83,10 +86,20 @@ export default function SettingsScreen() {
   };
 
   const handleLogout = () => {
-    Alert.alert('Keluar', 'Yakin ingin keluar dari akun?', [
-      { text: 'Batal', style: 'cancel' },
-      { text: 'Keluar', style: 'destructive', onPress: () => logout() },
-    ]);
+    setShowLogoutConfirm(true);
+  };
+
+  const confirmLogout = async () => {
+    setLoggingOut(true);
+    try {
+      await logout();
+      setShowLogoutConfirm(false);
+      router.replace('/login');
+    } catch (error) {
+      console.error('[Settings] Logout failed:', error);
+      setLoggingOut(false);
+      setShowLogoutConfirm(false);
+    }
   };
 
   const handleToggleWeeklyReport = async (enabled: boolean) => {
@@ -319,8 +332,46 @@ export default function SettingsScreen() {
           <Text style={[st.logoutText, { color: colors.expense, fontFamily: fonts.semiBold }]}>Keluar dari Akun</Text>
         </TouchableOpacity>
 
-        <View style={{ height: 40 }} />
+        <View style={{ height: 100 }} />
       </ScrollView>
+
+      {/* Logout Confirmation Modal */}
+      <Modal visible={showLogoutConfirm} transparent animationType="fade" onRequestClose={() => setShowLogoutConfirm(false)}>
+        <View style={st.modalOverlay}>
+          <Pressable style={st.modalBackdrop} onPress={() => !loggingOut && setShowLogoutConfirm(false)} />
+          <View style={[st.confirmDialog, { backgroundColor: colors.bgCard, borderColor: colors.border }]}>
+            <View style={{ alignItems: 'center', marginBottom: 16 }}>
+              <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: 'rgba(239,68,68,0.12)', justifyContent: 'center', alignItems: 'center', marginBottom: 12 }}>
+                <Ionicons name="log-out-outline" size={26} color={colors.expense} />
+              </View>
+              <Text style={[st.confirmTitle, { color: colors.text, fontFamily: fonts.bold }]}>Keluar dari Akun</Text>
+              <Text style={{ color: colors.textSecondary, fontFamily: fonts.regular, fontSize: 14, textAlign: 'center', marginTop: 8 }}>
+                Yakin ingin keluar dari akun Anda?
+              </Text>
+            </View>
+            <View style={st.confirmActions}>
+              <TouchableOpacity
+                style={[st.confirmBtn, { borderColor: colors.border, borderWidth: 1 }]}
+                onPress={() => setShowLogoutConfirm(false)}
+                disabled={loggingOut}
+              >
+                <Text style={[st.confirmBtnText, { color: colors.textSecondary, fontFamily: fonts.semiBold }]}>Batal</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[st.confirmBtn, { backgroundColor: colors.expense }]}
+                onPress={confirmLogout}
+                disabled={loggingOut}
+              >
+                {loggingOut ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <Text style={[st.confirmBtnText, { color: '#FFF', fontFamily: fonts.semiBold }]}>Keluar</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -328,7 +379,7 @@ export default function SettingsScreen() {
 const st = StyleSheet.create({
   container: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  scroll: { padding: 20, paddingBottom: 40 },
+  scroll: { padding: 20, paddingBottom: 140 },
   screenTitle: { fontSize: 24, marginBottom: 16 },
   section: { marginBottom: 20 },
   sectionTitle: { fontSize: 13, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 },
@@ -358,4 +409,11 @@ const st = StyleSheet.create({
   dayText: { fontSize: 12 },
   testNotifBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, borderRadius: 8, marginTop: 4 },
   testNotifText: { fontSize: 13 },
+  modalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
+  modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)' },
+  confirmDialog: { width: '100%', maxWidth: 340, borderRadius: 20, padding: 24, borderWidth: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.15, shadowRadius: 20, elevation: 15 },
+  confirmTitle: { fontSize: 20, textAlign: 'center' },
+  confirmActions: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, marginTop: 8 },
+  confirmBtn: { flex: 1, height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  confirmBtnText: { fontSize: 15 },
 });

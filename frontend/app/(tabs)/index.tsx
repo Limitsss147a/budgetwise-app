@@ -15,6 +15,7 @@ import type { Summary, CategoryBreakdown, DailyTrend, Transaction, Category } fr
 import { Card, CardTitle } from '../../src/components/ui/Card';
 import { DonutChart } from '../../src/components/ui/DonutChart';
 import { LoadingScreen } from '../../src/components/ui/LoadingScreen';
+import { AnimatedNumber } from '../../src/components/ui/AnimatedNumber';
 
 export default function Dashboard() {
   const router = useRouter();
@@ -90,9 +91,11 @@ export default function Dashboard() {
                 style={s.cardGradient}
               >
                 <Text style={[s.balLabel, { fontFamily: fonts.regular, color: 'rgba(255,255,255,0.8)' }]}>Total Saldo</Text>
-                <Text style={[s.balVal, { fontFamily: fonts.bold, color: '#FFF', textShadowColor: 'rgba(0,0,0,0.2)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 4 }]}>
-                  {formatRupiah(summary?.balance || 0)}
-                </Text>
+                <AnimatedNumber
+                  value={summary?.balance || 0}
+                  formatter={formatRupiah}
+                  style={[s.balVal, { fontFamily: fonts.bold, color: '#FFF', textShadowColor: 'rgba(0,0,0,0.2)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 4 }]}
+                />
                 <View style={s.balLine} />
                 <View style={s.balGrid}>
                   <View style={s.balItem}>

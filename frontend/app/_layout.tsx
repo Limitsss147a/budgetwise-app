@@ -79,6 +79,10 @@ function AuthGate() {
         if (!s.has_pin) setUnlocked(true);
         setPinChecked(true);
       }).catch(() => { setUnlocked(true); setPinChecked(true); });
+    } else if (!user) {
+      setPinChecked(false);
+      setUnlocked(false);
+      setPinRequired(false);
     }
   }, [user, pinChecked]);
 

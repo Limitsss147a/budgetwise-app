@@ -80,9 +80,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
-    await SafeStorage.multiRemove(['access_token', 'refresh_token']);
+    setUser(null);
+    setToken(null);
     setAuthToken(null);
-    setUser(null); setToken(null);
+    try {
+      await SafeStorage.multiRemove(['access_token', 'refresh_token']);
+    } catch (e) {
+      console.error('Logout storage error', e);
+    }
   };
 
   return (

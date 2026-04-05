@@ -12,6 +12,7 @@ import { formatPercentage } from '../../src/utils/format';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { LoadingScreen } from '../../src/components/ui/LoadingScreen';
+import { AnimatedNumber } from '../../src/components/ui/AnimatedNumber';
 
 interface Holding {
   ticker: string;
@@ -218,9 +219,11 @@ export default function PortfolioScreen() {
                   style={styles.cardGradient}
                 >
                   <Text style={[styles.nwLabel, { color: 'rgba(255,255,255,0.8)' }]}>Kekayaan Bersih (Net Worth)</Text>
-                  <Text style={[styles.nwAmount, { color: '#FFF', textShadowColor: 'rgba(0,0,0,0.2)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 4 }]}>
-                    {formatRupiah(data?.total_asset_value || 0)}
-                  </Text>
+                  <AnimatedNumber
+                    value={data?.total_asset_value || 0}
+                    formatter={formatRupiah}
+                    style={[styles.nwAmount, { color: '#FFF', textShadowColor: 'rgba(0,0,0,0.2)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 4 }]}
+                  />
                   
                   <View style={styles.nwDivider} />
                   

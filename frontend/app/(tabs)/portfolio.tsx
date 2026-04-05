@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl, Modal, Pressable, TextInput, Alert, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import Toast from 'react-native-toast-message';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
@@ -55,6 +56,7 @@ export default function PortfolioScreen() {
   const [isEditing, setIsEditing] = useState(false);
   const [pendingDeleteTicker, setPendingDeleteTicker] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [formError, setFormError] = useState('');
 
   const loadData = useCallback(async () => {
     try {
@@ -91,8 +93,9 @@ export default function PortfolioScreen() {
   };
 
   const handleSaveInvestment = async () => {
+    setFormError('');
     if (!tickerInput || !lotInput || !priceInput) {
-      Alert.alert('Error', 'Harap isi semua field');
+      setFormError('Harap isi semua field');
       return;
     }
     try {
@@ -118,9 +121,10 @@ export default function PortfolioScreen() {
       setLotInput('');
       setPriceInput('');
       setIsEditing(false);
+      Toast.show({ type: 'success', text1: isEditing ? 'Data investasi diperbarui' : 'Investasi ditambahkan' });
       await loadData(); // refresh
     } catch (e: any) {
-      Alert.alert('Error', e.message || 'Terjadi kesalahan saat menyimpan data');
+      setFormError(e.message || 'Gagal menyimpan data');
     } finally {
       setSubmitting(false);
     }
@@ -148,9 +152,10 @@ export default function PortfolioScreen() {
       setIsDeleting(true);
       await api.deleteInvestment(pendingDeleteTicker);
       setPendingDeleteTicker(null);
+      Toast.show({ type: 'success', text1: 'Investasi dihapus' });
       await loadData();
     } catch (e: any) {
-      Alert.alert('Error', e.message || 'Gagal menghapus saham');
+      Toast.show({ type: 'error', text1: e.message || 'Gagal menghapus' });
     } finally {
       setIsDeleting(false);
     }
@@ -310,7 +315,7 @@ export default function PortfolioScreen() {
       {/* Add Investment Modal */}
       <Modal visible={addModalVisible} transparent animationType="fade" onRequestClose={() => setAddModalVisible(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlayCenter}>
-          <Pressable style={styles.modalBackdrop} onPress={() => { setAddModalVisible(false); setIsEditing(false); }} />
+          <Pressable style={styles.modalBackdrop} onPress={() => { setAddModalVisible(false); setIsEditing(false); setFormError(''); }} />
           <View style={[styles.dialogContainer, { backgroundColor: colors.bgCard, borderColor: colors.border }]}>
             <Text style={[styles.dialogTitle, { color: colors.text }]}>{isEditing ? 'Edit Investasi' : 'Tambah Investasi'}</Text>
             
@@ -342,6 +347,8 @@ export default function PortfolioScreen() {
               keyboardType="decimal-pad"
             />
             
+            {formError ? <Text style={{ color: colors.expense, fontSize: 13, marginBottom: 16, textAlign: 'center', fontFamily: fonts.medium }}>{formError}</Text> : null}
+
             <View style={styles.dialogActions}>
               <TouchableOpacity style={[styles.dialogBtn, { borderColor: colors.border, borderWidth: 1 }]} onPress={() => { setAddModalVisible(false); setIsEditing(false); }}>
                 <Text style={[styles.dialogBtnText, { color: colors.textSecondary }]}>Batal</Text>

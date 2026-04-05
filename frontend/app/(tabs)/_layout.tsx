@@ -49,10 +49,10 @@ export default function TabsLayout() {
       >
         <Tabs.Screen name="index" options={{ title: 'Beranda', tabBarIcon: ({ color, size }) => <Ionicons name="home" size={size} color={color} /> }} />
         <Tabs.Screen name="transactions" options={{ title: 'Transaksi', tabBarIcon: ({ color, size }) => <Ionicons name="receipt" size={size} color={color} /> }} />
-        <Tabs.Screen name="portfolio" options={{ title: 'Investasi', tabBarIcon: ({ color, size }) => <Ionicons name="pie-chart" size={size} color={color} /> }} />
-        <Tabs.Screen name="reports" options={{ title: 'Laporan', tabBarIcon: ({ color, size }) => <Ionicons name="stats-chart" size={size} color={color} /> }} />
         <Tabs.Screen name="budget" options={{ title: 'Anggaran', tabBarIcon: ({ color, size }) => <Ionicons name="wallet" size={size} color={color} /> }} />
+        <Tabs.Screen name="reports" options={{ title: 'Laporan', tabBarIcon: ({ color, size }) => <Ionicons name="stats-chart" size={size} color={color} /> }} />
         <Tabs.Screen name="settings" options={{ title: 'Pengaturan', tabBarIcon: ({ color, size }) => <Ionicons name="settings" size={size} color={color} /> }} />
+        <Tabs.Screen name="portfolio" options={{ href: null }} />
       </Tabs>
       {!isPortfolio && (
         <TouchableOpacity

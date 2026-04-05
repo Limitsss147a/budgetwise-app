@@ -21,10 +21,37 @@ try {
 
 SplashScreen.preventAutoHideAsync();
 
+import * as LocalAuthentication from 'expo-local-authentication';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 function PinLock({ onUnlock }: { onUnlock: () => void }) {
   const { colors } = useTheme();
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
+  const [canBiometric, setCanBiometric] = useState(false);
+
+  useEffect(() => {
+    const checkBio = async () => {
+      const [hasHw, bioEnabled] = await Promise.all([
+        LocalAuthentication.hasHardwareAsync(),
+        AsyncStorage.getItem('biometric_enabled')
+      ]);
+      if (hasHw && bioEnabled === 'true') {
+        setCanBiometric(true);
+        handleBiometric();
+      }
+    };
+    checkBio();
+  }, []);
+
+  const handleBiometric = async () => {
+    const res = await LocalAuthentication.authenticateAsync({
+      promptMessage: 'Unlock BudgetWise',
+      fallbackLabel: 'Use PIN',
+    });
+    if (res.success) onUnlock();
+  };
+
   const handleDot = (num: string) => {
     if (pin.length < 6) {
       const np = pin + num;
@@ -50,6 +77,13 @@ function PinLock({ onUnlock }: { onUnlock: () => void }) {
             <Text style={[ps.keyText, { color: colors.text, fontFamily: 'Inter_600SemiBold' }]}>{k === 'del' ? '⌫' : k}</Text>
           </TouchableOpacity>
         ))}</View>
+
+        {canBiometric && (
+          <TouchableOpacity onPress={handleBiometric} style={ps.bioBtn}>
+            <Ionicons name="finger-print" size={20} color={colors.brand} />
+            <Text style={[ps.bioText, { color: colors.brand, fontFamily: 'Inter_600SemiBold' }]}>Gunakan Face ID / Sidik Jari</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -127,6 +161,8 @@ function AuthGate() {
   );
 }
 
+import Toast from 'react-native-toast-message';
+
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
     Inter_400Regular,
@@ -150,6 +186,7 @@ export default function RootLayout() {
     <ThemeProvider>
       <AuthProvider>
         <AuthGate />
+        <Toast />
       </AuthProvider>
     </ThemeProvider>
   );
@@ -165,4 +202,6 @@ const ps = StyleSheet.create({
   keypad: { flexDirection: 'row', flexWrap: 'wrap', width: 264, justifyContent: 'center', marginTop: 16 },
   key: { width: 72, height: 72, borderRadius: 36, justifyContent: 'center', alignItems: 'center', margin: 8 },
   keyText: { fontSize: 26 },
+  bioBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 40, padding: 12 },
+  bioText: { fontSize: 15 },
 });

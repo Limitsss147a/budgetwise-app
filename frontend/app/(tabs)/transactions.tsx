@@ -1,5 +1,7 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert, RefreshControl, Animated, Platform } from 'react-native';
+import Toast from 'react-native-toast-message';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -28,6 +30,7 @@ export default function Transactions() {
   const [filter, setFilter] = useState<string>('all');
   const [month, setMonth] = useState(getCurrentMonth());
   const [loadingMore, setLoadingMore] = useState(false);
+  const [showSwipeHint, setShowSwipeHint] = useState(false);
 
   const loadData = useCallback(async (p = 1, append = false) => {
     try {
@@ -45,13 +48,25 @@ export default function Transactions() {
     finally { setLoading(false); setRefreshing(false); setLoadingMore(false); }
   }, [filter, month]);
 
+  useEffect(() => {
+    const checkHint = async () => {
+      const hasSwiped = await AsyncStorage.getItem('has_swiped_tx');
+      if (!hasSwiped) setShowSwipeHint(true);
+    };
+    checkHint();
+  }, []);
+
   useFocusEffect(useCallback(() => { loadData(1); }, [loadData]));
 
   const handleDelete = (tx: Transaction) => {
     Alert.alert('Hapus Transaksi', `Yakin ingin menghapus transaksi ${formatRupiah(tx.amount)}?`, [
       { text: 'Batal', style: 'cancel' },
       { text: 'Hapus', style: 'destructive', onPress: async () => {
-        try { await api.deleteTransaction(tx.id); loadData(1); } catch (e) { Alert.alert('Error', 'Gagal menghapus'); }
+        try { 
+          await api.deleteTransaction(tx.id); 
+          Toast.show({ type: 'success', text1: 'Transaksi dihapus' });
+          loadData(1); 
+        } catch (e) { Toast.show({ type: 'error', text1: 'Gagal menghapus' }); }
       }},
     ]);
   };
@@ -74,8 +89,15 @@ export default function Transactions() {
       </TouchableOpacity>
     );
 
+    const onSwipeOpen = async () => {
+      if (showSwipeHint) {
+        setShowSwipeHint(false);
+        await AsyncStorage.setItem('has_swiped_tx', 'true');
+      }
+    };
+
     return (
-      <Swipeable renderRightActions={renderRightActions} overshootRight={false}>
+      <Swipeable renderRightActions={renderRightActions} overshootRight={false} onSwipeableWillOpen={onSwipeOpen}>
         <View style={st.glassWrapper}>
           <BlurView intensity={theme === 'dark' ? 20 : 60} tint={theme === 'dark' ? 'dark' : 'light'} style={st.glassCard}>
             <TouchableOpacity testID={`tx-item-${tx.id}`} style={[st.txRow, { borderBottomColor: colors.border }]} activeOpacity={1}
@@ -92,6 +114,11 @@ export default function Transactions() {
                   {tx.type === 'income' ? '+' : '-'}{formatRupiah(tx.amount)}
                 </Text>
               </View>
+              {showSwipeHint && (
+                <View style={st.swipeHint}>
+                  <Ionicons name="chevron-back" size={14} color={colors.textTertiary} style={{ opacity: 0.4 }} />
+                </View>
+              )}
             </TouchableOpacity>
           </BlurView>
         </View>
@@ -184,6 +211,7 @@ const st = StyleSheet.create({
   glassWrapper: { borderRadius: 16, overflow: 'hidden', marginBottom: 12, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8 },
   glassCard: { borderRadius: 16 },
   blob: { position: 'absolute', width: 300, height: 300, borderRadius: 150, filter: Platform.OS === 'ios' ? 'blur(60px)' : 'none' },
+  swipeHint: { position: 'absolute', right: 4, top: 0, bottom: 0, justifyContent: 'center' },
   deleteAction: { width: 75, justifyContent: 'center', alignItems: 'center', backgroundColor: '#EF4444' },
   empty: { alignItems: 'center', paddingTop: 60 },
   emptyTitle: { fontSize: 16, marginTop: 16 },

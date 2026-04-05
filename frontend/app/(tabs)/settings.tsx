@@ -1,5 +1,8 @@
 import { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, TextInput, Switch, ActivityIndicator, Platform, Modal, Pressable } from 'react-native';
+import Toast from 'react-native-toast-message';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as LocalAuthentication from 'expo-local-authentication';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -24,15 +27,26 @@ export default function SettingsScreen() {
   const [weeklyHour, setWeeklyHour] = useState(9);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [profileError, setProfileError] = useState('');
+  const [pinError, setPinError] = useState('');
+  const [biometricEnabled, setBiometricEnabled] = useState(false);
+  const [hasBiometricHardware, setHasBiometricHardware] = useState(false);
 
   const loadSettings = useCallback(async () => {
     try {
-      const s = await api.getSettings();
+      const [s, bio] = await Promise.all([
+        api.getSettings(),
+        AsyncStorage.getItem('biometric_enabled')
+      ]);
       setSettings(s);
       setProfileName(s.profile_name || user?.name || '');
       setWeeklyEnabled(s.weekly_report_enabled || false);
       setWeeklyDay(s.weekly_report_day || 1);
       setWeeklyHour(s.weekly_report_hour || 9);
+      setBiometricEnabled(bio === 'true');
+      
+      const hasHardware = await LocalAuthentication.hasHardwareAsync();
+      setHasBiometricHardware(hasHardware);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   }, [user]);
@@ -40,30 +54,35 @@ export default function SettingsScreen() {
   useFocusEffect(useCallback(() => { loadSettings(); }, [loadSettings]));
 
   const handleSaveName = async () => {
+    setProfileError('');
     try {
       await api.updateSettings({ profile_name: profileName });
-      Alert.alert('Berhasil', 'Nama profil disimpan');
-    } catch { Alert.alert('Error', 'Gagal menyimpan'); }
+      Toast.show({ type: 'success', text1: 'Nama profil disimpan' });
+    } catch { setProfileError('Gagal menyimpan profil'); }
   };
 
   const handleSetPin = async () => {
+    setPinError('');
     if (newPin.length !== 6 || !/^\d{6}$/.test(newPin)) {
-      Alert.alert('Error', 'PIN harus 6 digit angka'); return;
+      setPinError('PIN harus 6 digit angka'); return;
     }
     try {
       await api.setPin(newPin);
       setShowPinSetup(false); setNewPin('');
-      Alert.alert('Berhasil', 'PIN berhasil diatur');
+      Toast.show({ type: 'success', text1: 'PIN berhasil diatur' });
       loadSettings();
-    } catch { Alert.alert('Error', 'Gagal mengatur PIN'); }
+    } catch { setPinError('Gagal mengatur PIN'); }
   };
 
   const handleRemovePin = () => {
     Alert.alert('Hapus PIN', 'Yakin ingin menghapus PIN keamanan?', [
       { text: 'Batal', style: 'cancel' },
       { text: 'Hapus', style: 'destructive', onPress: async () => {
-        try { await api.removePin(); Alert.alert('Berhasil', 'PIN dihapus'); loadSettings(); }
-        catch { Alert.alert('Error', 'Gagal menghapus PIN'); }
+        try { 
+          await api.removePin(); 
+          Toast.show({ type: 'success', text1: 'PIN dihapus' }); 
+          loadSettings(); 
+        } catch { Toast.show({ type: 'error', text1: 'Gagal menghapus PIN' }); }
       }},
     ]);
   };
@@ -71,16 +90,19 @@ export default function SettingsScreen() {
   const handleBackup = async () => {
     try {
       const data = await api.getBackup();
-      Alert.alert('Backup', `Data berhasil diexport:\n${data.transactions.length} transaksi\n${data.categories.length} kategori\n${data.budgets.length} anggaran`);
-    } catch { Alert.alert('Error', 'Gagal backup data'); }
+      Alert.alert('Backup Berhasil', `${data.transactions.length} transaksi, ${data.categories.length} kategori, ${data.budgets.length} anggaran`);
+    } catch { Toast.show({ type: 'error', text1: 'Gagal backup data' }); }
   };
 
   const handleReset = () => {
     Alert.alert('Reset Data', 'PERINGATAN: Semua data akan dihapus permanen. Lanjutkan?', [
       { text: 'Batal', style: 'cancel' },
       { text: 'Reset', style: 'destructive', onPress: async () => {
-        try { await api.resetData(); Alert.alert('Berhasil', 'Semua data telah direset'); loadSettings(); }
-        catch { Alert.alert('Error', 'Gagal mereset data'); }
+        try { 
+          await api.resetData(); 
+          Toast.show({ type: 'success', text1: 'Semua data telah direset' }); 
+          loadSettings(); 
+        } catch { Toast.show({ type: 'error', text1: 'Gagal mereset data' }); }
       }},
     ]);
   };
@@ -106,7 +128,7 @@ export default function SettingsScreen() {
     setWeeklyEnabled(enabled);
     if (enabled) {
       if (Platform.OS === 'web') {
-        Alert.alert('Info', 'Notifikasi hanya tersedia di perangkat mobile (iOS/Android)');
+        Toast.show({ type: 'info', text1: 'Notifikasi hanya tersedia di mobile' });
         setWeeklyEnabled(false);
         return;
       }
@@ -118,7 +140,7 @@ export default function SettingsScreen() {
       }
       await scheduleWeeklyReport(weeklyDay, weeklyHour);
       await api.updateSettings({ weekly_report_enabled: true, weekly_report_day: weeklyDay, weekly_report_hour: weeklyHour });
-      Alert.alert('Berhasil', `Laporan mingguan dijadwalkan setiap ${getDayName(weeklyDay)} pukul ${weeklyHour}:00`);
+      Toast.show({ type: 'success', text1: `Laporan dijadwalkan ${getDayName(weeklyDay)} ${weeklyHour}:00` });
     } else {
       await cancelWeeklyReport();
       await api.updateSettings({ weekly_report_enabled: false });
@@ -143,7 +165,7 @@ export default function SettingsScreen() {
 
   const handleTestNotification = async () => {
     if (Platform.OS === 'web') {
-      Alert.alert('Info', 'Notifikasi hanya tersedia di perangkat mobile');
+      Toast.show({ type: 'info', text1: 'Notifikasi hanya tersedia di mobile' });
       return;
     }
     const granted = await requestNotificationPermissions();
@@ -152,7 +174,25 @@ export default function SettingsScreen() {
       return;
     }
     await sendTestNotification();
-    Alert.alert('Terkirim', 'Notifikasi contoh telah dikirim!');
+    Toast.show({ type: 'success', text1: 'Notifikasi contoh terkirim!' });
+  };
+
+  const handleToggleBiometric = async (val: boolean) => {
+    try {
+      if (val) {
+        const enrolled = await LocalAuthentication.isEnrolledAsync();
+        if (!enrolled) {
+          Alert.alert('Gagal', 'Belum ada data biometrik di perangkat ini');
+          return;
+        }
+      }
+      setBiometricEnabled(val);
+      await AsyncStorage.setItem('biometric_enabled', String(val));
+      Toast.show({ type: 'success', text1: val ? 'Biometrik diaktifkan' : 'Biometrik dinonaktifkan' });
+    } catch (e) {
+      console.error(e);
+      Toast.show({ type: 'error', text1: 'Gagal mengatur biometrik' });
+    }
   };
 
   if (loading) {
@@ -175,12 +215,25 @@ export default function SettingsScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={[st.emailText, { color: theme === 'dark' ? '#D1D5DB' : colors.textSecondary, fontFamily: fonts.regular }]}>{user?.email || ''}</Text>
                 <TextInput testID="profile-name-input" style={[st.nameInput, { color: colors.text, backgroundColor: colors.bgSecondary, fontFamily: fonts.medium }]} placeholder="Nama Anda"
-                  value={profileName} onChangeText={setProfileName} placeholderTextColor={colors.textTertiary} />
+                  value={profileName} onChangeText={t => { setProfileName(t); setProfileError(''); }} placeholderTextColor={colors.textTertiary} />
+                {profileError ? <Text style={{ color: colors.expense, fontSize: 11, marginTop: 4, fontFamily: fonts.medium }}>{profileError}</Text> : null}
               </View>
               <TouchableOpacity testID="save-profile-btn" style={[st.saveNameBtn, { backgroundColor: colors.accent }]} onPress={handleSaveName}>
                 <Text style={[st.saveNameText, { fontFamily: fonts.semiBold }]}>Simpan</Text>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+
+        {/* Investasi (Moved from Tab Bar) */}
+        <View style={st.section}>
+          <Text style={[st.sectionTitle, { color: colors.textTertiary, fontFamily: fonts.semiBold }]}>Investasi</Text>
+          <View style={[st.card, { backgroundColor: colors.bgCard, borderColor: colors.border }]}>
+            <TouchableOpacity testID="go-to-portfolio-btn" style={st.settingRow} onPress={() => router.push('/(tabs)/portfolio')}>
+              <Ionicons name="pie-chart-outline" size={20} color={colors.brand} />
+              <Text style={[st.settingLabel, { color: colors.text, fontFamily: fonts.medium }]}>Portofolio Saham</Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -265,6 +318,24 @@ export default function SettingsScreen() {
                 {settings?.has_pin ? 'Aktif' : 'Nonaktif'}
               </Text>
             </View>
+
+            {settings?.has_pin && hasBiometricHardware && (
+              <>
+                <View style={[st.divider, { backgroundColor: colors.border }]} />
+                <View style={st.settingRow}>
+                  <Ionicons name="finger-print-outline" size={20} color={colors.brand} />
+                  <Text style={[st.settingLabel, { color: colors.text, fontFamily: fonts.medium }]}>Gunakan Biometrik</Text>
+                  <Switch
+                    testID="biometric-toggle"
+                    value={biometricEnabled}
+                    onValueChange={handleToggleBiometric}
+                    trackColor={{ false: colors.border, true: colors.brand }}
+                    thumbColor={biometricEnabled ? colors.accent : '#f4f3f4'}
+                  />
+                </View>
+              </>
+            )}
+
             <View style={st.pinActions}>
               {settings?.has_pin ? (
                 <TouchableOpacity testID="remove-pin-btn" style={[st.dangerBtn, { backgroundColor: colors.expense }]} onPress={handleRemovePin}>
@@ -275,16 +346,19 @@ export default function SettingsScreen() {
                   <Text style={[st.primaryBtnText, { fontFamily: fonts.semiBold }]}>Atur PIN</Text>
                 </TouchableOpacity>
               ) : (
-                <View style={st.pinSetupRow}>
-                  <TextInput testID="new-pin-input" style={[st.pinInput, { color: colors.text, backgroundColor: colors.bgSecondary, borderColor: colors.border, fontFamily: fonts.semiBold }]} keyboardType="numeric" maxLength={6}
-                    secureTextEntry placeholder="6 digit PIN" value={newPin} onChangeText={setNewPin} placeholderTextColor={colors.textTertiary} />
-                  <TouchableOpacity testID="confirm-pin-btn" style={[st.primaryBtn, { backgroundColor: colors.brand }]} onPress={handleSetPin}>
-                    <Text style={[st.primaryBtnText, { fontFamily: fonts.semiBold }]}>Simpan</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={() => { setShowPinSetup(false); setNewPin(''); }}>
+                <>
+                  <View style={st.pinSetupRow}>
+                    <TextInput testID="new-pin-input" style={[st.pinInput, { color: colors.text, backgroundColor: colors.bgSecondary, borderColor: colors.border, fontFamily: fonts.semiBold }]} keyboardType="numeric" maxLength={6}
+                    secureTextEntry placeholder="6 digit PIN" value={newPin} onChangeText={t => { setNewPin(t); setPinError(''); }} placeholderTextColor={colors.textTertiary} />
+                    <TouchableOpacity testID="confirm-pin-btn" style={[st.primaryBtn, { backgroundColor: colors.brand }]} onPress={handleSetPin}>
+                      <Text style={[st.primaryBtnText, { fontFamily: fonts.semiBold }]}>Simpan</Text>
+                    </TouchableOpacity>
+                  </View>
+                  {pinError ? <Text style={{ color: colors.expense, fontSize: 11, marginTop: 8, fontFamily: fonts.medium }}>{pinError}</Text> : null}
+                  <TouchableOpacity onPress={() => { setShowPinSetup(false); setNewPin(''); setPinError(''); }} style={{ marginTop: 8 }}>
                     <Text style={[st.cancelText, { color: colors.textTertiary, fontFamily: fonts.medium }]}>Batal</Text>
                   </TouchableOpacity>
-                </View>
+                </>
               )}
             </View>
           </View>

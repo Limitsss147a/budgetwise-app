@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, TextInput, Alert, RefreshControl, Modal } from 'react-native';
+import Toast from 'react-native-toast-message';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
@@ -24,6 +25,7 @@ export default function BudgetScreen() {
   const [showModal, setShowModal] = useState(false);
   const [selCat, setSelCat] = useState<string>('');
   const [budgetAmt, setBudgetAmt] = useState('');
+  const [formError, setFormError] = useState('');
 
   const loadData = useCallback(async () => {
     try {
@@ -42,20 +44,26 @@ export default function BudgetScreen() {
   const totalSpent = budgets.reduce((s, b) => s + getSpentForCat(b.category_id), 0);
 
   const handleSaveBudget = async () => {
+    setFormError('');
     const amount = parseAmountInput(budgetAmt);
-    if (!selCat || amount <= 0) { Alert.alert('Error', 'Pilih kategori dan masukkan jumlah'); return; }
+    if (!selCat || amount <= 0) { setFormError('Pilih kategori dan masukkan jumlah'); return; }
     try {
       await api.createBudget({ category_id: selCat, amount, month });
       setShowModal(false); setBudgetAmt(''); setSelCat('');
+      Toast.show({ type: 'success', text1: 'Anggaran disimpan' });
       loadData();
-    } catch (e) { Alert.alert('Error', 'Gagal menyimpan anggaran'); }
+    } catch (e: any) { setFormError(e.message || 'Gagal menyimpan anggaran'); }
   };
 
   const handleDeleteBudget = (b: Budget) => {
     Alert.alert('Hapus Anggaran', 'Yakin ingin menghapus anggaran ini?', [
       { text: 'Batal', style: 'cancel' },
       { text: 'Hapus', style: 'destructive', onPress: async () => {
-        try { await api.deleteBudget(b.id); loadData(); } catch { Alert.alert('Error', 'Gagal menghapus'); }
+        try { 
+          await api.deleteBudget(b.id); 
+          Toast.show({ type: 'success', text1: 'Anggaran dihapus' });
+          loadData(); 
+        } catch { Toast.show({ type: 'error', text1: 'Gagal menghapus' }); }
       }},
     ]);
   };
@@ -177,7 +185,7 @@ export default function BudgetScreen() {
           <View style={[st.modalContent, { backgroundColor: colors.bgCard }]}>
             <View style={st.modalHeader}>
               <Text style={[st.modalTitle, { color: colors.text, fontFamily: fonts.semiBold }]}>Atur Anggaran</Text>
-              <TouchableOpacity testID="close-budget-modal" onPress={() => setShowModal(false)}>
+              <TouchableOpacity testID="close-budget-modal" onPress={() => { setShowModal(false); setFormError(''); }}>
                 <Ionicons name="close" size={24} color={colors.text} />
               </TouchableOpacity>
             </View>
@@ -198,8 +206,10 @@ export default function BudgetScreen() {
             <View style={[st.amtRow, { backgroundColor: colors.bgSecondary, borderColor: colors.border }]}>
               <Text style={[st.rupiah, { color: colors.text, fontFamily: fonts.semiBold }]}>Rp</Text>
               <TextInput testID="budget-amount-input" style={[st.amtInput, { color: colors.text, fontFamily: fonts.semiBold }]} keyboardType="numeric" placeholder="0"
-                value={formatAmountInput(budgetAmt)} onChangeText={t => setBudgetAmt(t.replace(/\D/g, ''))} placeholderTextColor={colors.textTertiary} />
+                value={formatAmountInput(budgetAmt)} onChangeText={t => { setBudgetAmt(t.replace(/\D/g, '')); setFormError(''); }} placeholderTextColor={colors.textTertiary} />
             </View>
+
+            {formError ? <Text style={{ color: colors.expense, fontSize: 13, marginBottom: 16, textAlign: 'center', fontFamily: fonts.medium }}>{formError}</Text> : null}
 
             <TouchableOpacity testID="save-budget-btn" style={[st.saveBtn, { backgroundColor: colors.brand }]} onPress={handleSaveBudget} activeOpacity={0.8}>
               <Text style={[st.saveBtnText, { fontFamily: fonts.semiBold }]}>Simpan Anggaran</Text>

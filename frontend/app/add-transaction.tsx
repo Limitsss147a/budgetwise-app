@@ -8,6 +8,9 @@ import { formatAmountInput, parseAmountInput } from '../src/utils/format';
 import { useTheme } from '../src/contexts/ThemeContext';
 import { fonts } from '../src/constants/fonts';
 import type { Category } from '../src/types';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import Toast from 'react-native-toast-message';
+import { format } from 'date-fns';
 
 export default function AddTransaction() {
   const router = useRouter();
@@ -22,6 +25,9 @@ export default function AddTransaction() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(false);
   const [initLoading, setInitLoading] = useState(true);
+  const [date, setDate] = useState(new Date());
+  const [showPicker, setShowPicker] = useState(false);
+  const [formError, setFormError] = useState('');
 
   useEffect(() => {
     const init = async () => {
@@ -32,6 +38,7 @@ export default function AddTransaction() {
           setAmount(String(tx.amount));
           setCategoryId(tx.category_id);
           setDescription(tx.description || '');
+          setDate(new Date(tx.date));
         }
         const cats = await api.getCategories();
         setCategories(cats);
@@ -50,21 +57,24 @@ export default function AddTransaction() {
   }, [type, filteredCats.length]);
 
   const handleSave = async () => {
+    setFormError('');
     const amt = parseAmountInput(amount);
-    if (amt <= 0) { Alert.alert('Error', 'Masukkan jumlah yang valid'); return; }
-    if (!categoryId) { Alert.alert('Error', 'Pilih kategori'); return; }
+    if (amt <= 0) { setFormError('Masukkan jumlah yang valid'); return; }
+    if (!categoryId) { setFormError('Pilih kategori'); return; }
 
     setLoading(true);
     try {
       const data = {
         type, amount: amt, category_id: categoryId,
-        description, date: new Date().toISOString(),
+        description, date: date.toISOString(),
       };
       if (isEdit) await api.updateTransaction(id!, data);
       else await api.createTransaction(data);
-      router.back();
+      
+      Toast.show({ type: 'success', text1: isEdit ? 'Perubahan disimpan' : 'Transaksi tersimpan' });
+      setTimeout(() => router.back(), 800);
     } catch (e: any) {
-      Alert.alert('Error', e.message || 'Gagal menyimpan');
+      setFormError(e.message || 'Gagal menyimpan');
     } finally { setLoading(false); }
   };
 
@@ -117,10 +127,22 @@ export default function AddTransaction() {
             <View style={st.amountRow}>
               <Text style={[st.rupiah, { color: colors.text, fontFamily: fonts.semiBold }]}>Rp</Text>
               <TextInput testID="amount-input" style={[st.amountInput, { color: colors.text, fontFamily: fonts.bold }]} keyboardType="numeric" placeholder="0"
-                value={formatAmountInput(amount)} onChangeText={t => setAmount(t.replace(/\D/g, ''))}
+                value={formatAmountInput(amount)} onChangeText={t => { setAmount(t.replace(/\D/g, '')); if (formError) setFormError(''); }}
                 placeholderTextColor={colors.textTertiary} />
             </View>
           </View>
+
+          <Text style={[st.label, { color: colors.textTertiary, fontFamily: fonts.semiBold }]}>Tanggal</Text>
+          <TouchableOpacity testID="date-picker-btn" style={[st.dateBtn, { backgroundColor: colors.bgCard, borderColor: colors.border }]}
+            onPress={() => setShowPicker(true)}>
+            <Ionicons name="calendar-outline" size={20} color={colors.textSecondary} />
+            <Text style={[st.dateText, { color: colors.text, fontFamily: fonts.regular }]}>{format(date, 'dd/MM/yyyy')}</Text>
+          </TouchableOpacity>
+
+          {showPicker && (
+            <DateTimePicker value={date} mode="date" display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              onChange={(e, d) => { setShowPicker(false); if (d) setDate(d); }} />
+          )}
 
           <Text style={[st.label, { color: colors.textTertiary, fontFamily: fonts.semiBold }]}>Kategori</Text>
           <View style={st.catGrid}>
@@ -139,6 +161,8 @@ export default function AddTransaction() {
           <Text style={[st.label, { color: colors.textTertiary, fontFamily: fonts.semiBold }]}>Catatan (Opsional)</Text>
           <TextInput testID="description-input" style={[st.descInput, { backgroundColor: colors.bgCard, color: colors.text, borderColor: colors.border, fontFamily: fonts.regular }]} placeholder="Contoh: Makan siang di kantin"
             value={description} onChangeText={setDescription} multiline placeholderTextColor={colors.textTertiary} />
+
+          {formError ? <Text style={[st.errorText, { color: '#FB7185', fontFamily: fonts.medium }]}>{formError}</Text> : null}
 
           <TouchableOpacity testID="save-transaction-btn" style={[st.saveBtn, { backgroundColor: colors.brand }, loading && st.saveBtnDisabled]}
             onPress={handleSave} disabled={loading} activeOpacity={0.8}>
@@ -182,6 +206,9 @@ const st = StyleSheet.create({
   catItem: { width: '30%' as any, alignItems: 'center', paddingVertical: 12, borderRadius: 12, borderWidth: 1 },
   catIconBg: { width: 36, height: 36, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginBottom: 6 },
   catName: { fontSize: 11, textAlign: 'center', paddingHorizontal: 4 },
+  dateBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F9FAFB', borderRadius: 12, padding: 14, marginBottom: 20, borderWidth: 1, gap: 10 },
+  dateText: { fontSize: 15 },
+  errorText: { textAlign: 'center', marginBottom: 16, fontSize: 14 },
   descInput: { borderRadius: 12, padding: 14, fontSize: 14, minHeight: 60, textAlignVertical: 'top', borderWidth: 1, marginBottom: 24 },
   saveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: 14, paddingVertical: 16, gap: 8 },
   saveBtnDisabled: { opacity: 0.6 },

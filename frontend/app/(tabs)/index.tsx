@@ -53,6 +53,8 @@ export default function Dashboard() {
   const barData = dailyTrend.map(day => ({
     value: day.expense, label: formatDayName(day.date), frontColor: colors.brand,
   }));
+  const maxTrendValue = Math.max(...barData.map(d => d.value), 0);
+  const chartMaxValue = maxTrendValue > 0 ? maxTrendValue * 1.3 : 100;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
@@ -176,6 +178,27 @@ export default function Dashboard() {
                     <BarChart data={barData} barWidth={26} spacing={14} barBorderRadius={6} frontColor={colors.brand}
                       yAxisThickness={0} xAxisThickness={1} xAxisColor={colors.border} noOfSections={4}
                       hideRules hideYAxisText xAxisLabelTextStyle={{ color: colors.textTertiary, fontSize: 10, fontFamily: fonts.regular }}
+                      maxValue={chartMaxValue}
+                      renderTooltip={(item: any) => {
+                        return (
+                          <View style={{
+                            marginBottom: 4,
+                            backgroundColor: theme === 'dark' ? '#374151' : '#F1F5F9',
+                            paddingHorizontal: 8,
+                            paddingVertical: 6,
+                            borderRadius: 8,
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 2 },
+                            shadowOpacity: 0.1,
+                            shadowRadius: 4,
+                            elevation: 2,
+                          }}>
+                            <Text style={{ color: colors.text, fontFamily: fonts.bold, fontSize: 11 }}>
+                              {formatRupiah(item.value)}
+                            </Text>
+                          </View>
+                        );
+                      }}
                     />
                   </View>
                 </View>

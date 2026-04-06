@@ -5,7 +5,7 @@ load_dotenv(Path(__file__).parent / '.env')
 from fastapi import FastAPI, APIRouter, Query, HTTPException, Depends, Request
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
-import os, logging, uuid, hashlib, csv, io, bcrypt, jwt
+import os, logging, uuid, csv, io, bcrypt, jwt
 from datetime import datetime, timezone, timedelta
 from pydantic import BaseModel
 from typing import Optional, List
@@ -148,6 +148,37 @@ DEFAULT_CATEGORIES = [
 @app.on_event("startup")
 async def startup():
     await db.users.create_index("email", unique=True)
+    
+    # Index paling penting — query utama semua analytics
+    await db.transactions.create_index(
+        [("user_id", 1), ("date", -1)],
+        name="user_date_idx"
+    )
+    await db.transactions.create_index(
+        [("user_id", 1), ("type", 1), ("date", -1)],
+        name="user_type_date_idx"
+    )
+
+    # Budget lookup
+    await db.budgets.create_index(
+        [("user_id", 1), ("month", 1)],
+        name="user_month_idx"
+    )
+
+    # Market prices cleanup otomatis setelah 24 jam
+    await db.market_prices.create_index(
+        "updated_at",
+        expireAfterSeconds=86400,
+        name="ttl_market_prices"
+    )
+
+    # Investment lookup
+    await db.investments.create_index(
+        [("user_id", 1), ("ticker", 1)],
+        unique=True,
+        name="user_ticker_unique"
+    )
+    
     # Seed categories
     if await db.categories.count_documents({"is_default": True}) == 0:
         cats = [{"id": str(uuid.uuid4()), **c, "is_default": True, "created_at": datetime.now(timezone.utc).isoformat()} for c in DEFAULT_CATEGORIES]
@@ -455,7 +486,7 @@ async def register_push_token(data: PushTokenRequest, user: dict = Depends(get_c
 async def set_pin(data: PinRequest, user: dict = Depends(get_current_user)):
     if len(data.pin) != 6 or not data.pin.isdigit():
         raise HTTPException(400, "PIN harus 6 digit")
-    h = hashlib.sha256(data.pin.encode()).hexdigest()
+    h = bcrypt.hashpw(data.pin.encode(), bcrypt.gensalt(rounds=12)).decode()
     await db.settings.update_one({"user_id": user["id"]}, {"$set": {"pin_hash": h}}, upsert=True)
     return {"message": "PIN diatur", "has_pin": True}
 
@@ -464,7 +495,7 @@ async def verify_pin(data: PinRequest, user: dict = Depends(get_current_user)):
     s = await db.settings.find_one({"user_id": user["id"]})
     if not s or not s.get("pin_hash"):
         return {"valid": True}
-    if hashlib.sha256(data.pin.encode()).hexdigest() == s["pin_hash"]:
+    if bcrypt.checkpw(data.pin.encode(), s["pin_hash"].encode()):
         return {"valid": True}
     raise HTTPException(401, "PIN salah")
 

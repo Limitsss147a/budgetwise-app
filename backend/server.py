@@ -626,6 +626,27 @@ async def update_market_prices(user: dict = Depends(get_current_user)):
             updated.append(doc)
     return {"message": "Prices updated", "updated": updated}
 
+PRICE_STALE_SECONDS = 300  # 5 minutes
+
+async def _refresh_ticker_price(ticker: str):
+    """Fetch fresh price for a single ticker and update db.market_prices."""
+    try:
+        data = await fetch_stock_price(ticker)
+        if data and isinstance(data, dict) and data.get("price"):
+            doc = {
+                "ticker": ticker,
+                "price": data.get("price", 0.0),
+                "pbv": data.get("pbv", 0.0),
+                "roe": data.get("roe", 0.0),
+                "der": data.get("der", 0.0),
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }
+            await db.market_prices.update_one({"ticker": ticker}, {"$set": doc}, upsert=True)
+            return doc
+    except Exception as e:
+        logger.warning(f"Auto-refresh failed for {ticker}: {e}")
+    return None
+
 @api_router.get("/portfolio/net-worth")
 async def get_net_worth(user: dict = Depends(get_current_user)):
     uid = user["id"]
@@ -641,6 +662,28 @@ async def get_net_worth(user: dict = Depends(get_current_user)):
     u = await db.users.find_one({"id": uid})
     investments = u.get("investments", [])
     
+    # 3. Auto-refresh stale prices (older than 5 minutes)
+    now = datetime.now(timezone.utc)
+    stale_tickers = []
+    for inv in investments:
+        ticker = inv["ticker"]
+        market_data = await db.market_prices.find_one({"ticker": ticker})
+        if not market_data:
+            stale_tickers.append(ticker)
+        else:
+            try:
+                updated_at = datetime.fromisoformat(market_data["updated_at"].replace("Z", "+00:00"))
+                age = (now - updated_at).total_seconds()
+                if age > PRICE_STALE_SECONDS:
+                    stale_tickers.append(ticker)
+            except Exception:
+                stale_tickers.append(ticker)
+    
+    if stale_tickers:
+        logger.info(f"Auto-refreshing {len(stale_tickers)} stale tickers: {stale_tickers}")
+        await asyncio.gather(*[_refresh_ticker_price(t) for t in stale_tickers])
+
+    # 4. Build holdings with fresh data
     total_investment_value = 0
     total_unrealized_pl = 0
     holdings = []

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl, Modal, Pressable, TextInput, Alert, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -14,6 +14,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { LoadingScreen } from '../../src/components/ui/LoadingScreen';
 import { AnimatedNumber } from '../../src/components/ui/AnimatedNumber';
+
+const AUTO_REFRESH_INTERVAL = 60_000; // 60 seconds
 
 interface Holding {
   ticker: string;
@@ -57,6 +59,7 @@ export default function PortfolioScreen() {
   const [pendingDeleteTicker, setPendingDeleteTicker] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [formError, setFormError] = useState('');
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -70,9 +73,19 @@ export default function PortfolioScreen() {
     }
   }, []);
 
+  // Auto-refresh prices every 60s while screen is focused
   useFocusEffect(
     useCallback(() => {
       loadData();
+      intervalRef.current = setInterval(() => {
+        loadData();
+      }, AUTO_REFRESH_INTERVAL);
+      return () => {
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+          intervalRef.current = null;
+        }
+      };
     }, [loadData])
   );
 

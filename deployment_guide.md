@@ -34,6 +34,7 @@ Karena Anda sudah menggunakan GitHub, kita akan menyambungkan repositori GitHub 
 | `JWT_SECRET` | Buat kombinasi teks/angka acak yang panjang (contoh: `supeR_r4hasIa_123!45`). |
 | `ADMIN_EMAIL` | Email untuk akun admin (contoh: `admin@budgetwise.mobi`). |
 | `ADMIN_PASSWORD` | Password akun admin saat pertama kali masuk (contoh: `admin1234`). |
+| `ALLOWED_ORIGINS` | Daftar asal (*origins*) yang diizinkan untuk bypass CORS (berguna bila Anda merilis web/dashboard di luar mobile app). Bisa diabaikan atau contoh: `https://frontend-anda.vercel.app`. |
 
 7. Setelah variabel dimasukkan, buka tab **Settings**, gulir ke bawah ke bagian **Networking**, dan klik **Generate Domain**. Railway akan memberikan Anda URL permanen yang aman (contoh: `https://budgetwise-backendxxxx.up.railway.app`).
 8. **Simpan URL Public ini**! Ini adalah `BACKEND_URL` Anda yang akan dipakai di aplikasi mobile (frontend).
@@ -41,26 +42,16 @@ Karena Anda sudah menggunakan GitHub, kita akan menyambungkan repositori GitHub 
 ---
 
 ## 📱 Tahap 3: Update Konfigurasi Aplikasi Mobile (Frontend)
-Sekarang, backend Anda telah hidup di Railway. Kita perlu mengarahkan aplikasi seluler Anda untuk berkomunikasi dengan server baru Anda, bukan server lokal.
+Sekarang, backend Anda telah hidup di Railway. Kita perlu mengarahkan aplikasi seluler Anda untuk berkomunikasi dengan server baru Anda dengan menggunakan metode aman (EAS Secrets), bukan di-_hardcode_ secara lokal.
 
-1. Buka file [frontend/eas.json](file:///d:/coding/BudgetWise/frontend/eas.json) pada repositori Anda.
-2. Pada bagian `build > preview > env`, ganti nilai `EXPO_PUBLIC_BACKEND_URL` dengan URL Railway Public API Server Anda (yang Anda dapatkan di Langkah 7).
-
-   ```json
-       "preview": {
-         "distribution": "internal",
-         "android": {
-           "buildType": "apk"
-         },
-         "env": {
-           // GANTI BARIS INI
-           "EXPO_PUBLIC_BACKEND_URL": "https://budgetwise-backendxxxx.up.railway.app"
-         },
-         // ...
+1. Buka halaman proyek Expo Anda di [EAS (Expo Application Services)](https://expo.dev), masuk ke menu **Secrets** ATAU gunakan terminal bawaan.
+2. Daftarkan URL Public dari Railway melalui terminal di lingkungan `frontend`:
+   ```bash
+   eas secret:create --scope project --name EXPO_PUBLIC_BACKEND_URL --value "https://budgetwise-backendxxxx.up.railway.app"
    ```
-*(Ingat: pastikan tidak ada garis miring `/` di bagian paling akhir URL tersebut!)*
+   *(Ingat: pastikan mengganti link tersebut dengan URL aslinya dan tidak memakai garis miring (`/`) di paling akhir URL!)*
 
-3. Setelah mengganti, jangan lupa untuk di-*commit* dan di-*push* perubahan [eas.json](file:///d:/coding/BudgetWise/frontend/eas.json) ke GitHub.
+3. Anda **tidak perlu mengedit** file [frontend/eas.json](file:///d:/coding/BudgetWise/frontend/eas.json) secara manual karena hal tersebut sudah dikonfigurasikan agar mendelegasikan nilai otomatis dari `$EXPO_PUBLIC_BACKEND_URL` sebagai lingkungan *preview* maupun *production*.
 
 ---
 

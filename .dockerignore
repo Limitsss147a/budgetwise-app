@@ -1,0 +1,6 @@
+# Exclude frontend dari Docker build context
+frontend/
+*.md
+.git
+.gitignore
+design_guidelines.json

@@ -1,13 +1,11 @@
-/**
- * Safe AsyncStorage wrapper with in-memory fallback
- * Handles cases where native module is not available (e.g., Expo Go)
- */
+import * as SecureStore from 'expo-secure-store';
 
 let AsyncStorageModule: any = null;
 let storageAvailable = false;
 
 // In-memory fallback storage
 const memoryStorage: Record<string, string> = {};
+const SECURE_KEYS = ['access_token', 'refresh_token'];
 
 // Try to load AsyncStorage
 try {
@@ -19,6 +17,14 @@ try {
 
 export const SafeStorage = {
   async getItem(key: string): Promise<string | null> {
+    if (SECURE_KEYS.includes(key)) {
+      try { 
+        return await SecureStore.getItemAsync(key); 
+      } catch { 
+        return memoryStorage[key] ?? null; 
+      }
+    }
+    
     try {
       if (storageAvailable && AsyncStorageModule) {
         return await AsyncStorageModule.getItem(key);
@@ -30,6 +36,14 @@ export const SafeStorage = {
   },
 
   async setItem(key: string, value: string): Promise<void> {
+    if (SECURE_KEYS.includes(key)) {
+      memoryStorage[key] = value; // in-memory fallback tetap ada
+      try { 
+        await SecureStore.setItemAsync(key, value); 
+      } catch {}
+      return;
+    }
+    
     memoryStorage[key] = value;
     try {
       if (storageAvailable && AsyncStorageModule) {
@@ -42,6 +56,13 @@ export const SafeStorage = {
 
   async removeItem(key: string): Promise<void> {
     delete memoryStorage[key];
+    if (SECURE_KEYS.includes(key)) {
+      try { 
+        await SecureStore.deleteItemAsync(key); 
+      } catch {}
+      return;
+    }
+    
     try {
       if (storageAvailable && AsyncStorageModule) {
         await AsyncStorageModule.removeItem(key);
@@ -53,12 +74,18 @@ export const SafeStorage = {
 
   async multiRemove(keys: string[]): Promise<void> {
     keys.forEach(k => delete memoryStorage[k]);
-    try {
-      if (storageAvailable && AsyncStorageModule) {
-        await AsyncStorageModule.multiRemove(keys);
+    for (const key of keys) {
+      if (SECURE_KEYS.includes(key)) {
+        try { 
+          await SecureStore.deleteItemAsync(key); 
+        } catch {}
+      } else {
+        try {
+          if (storageAvailable && AsyncStorageModule) {
+            await AsyncStorageModule.removeItem(key);
+          }
+        } catch (e) {}
       }
-    } catch (e) {
-      console.warn(`[Storage] multiRemove failed:`, e);
     }
   },
 };

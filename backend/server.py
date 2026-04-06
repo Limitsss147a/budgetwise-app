@@ -24,6 +24,16 @@ db = client[os.environ['DB_NAME']]
 JWT_SECRET = os.environ['JWT_SECRET']
 JWT_ALG = "HS256"
 
+def month_range_query(month: str) -> dict:
+    """Konversi '2025-01' menjadi range query yang bisa menggunakan index."""
+    year, m = int(month.split('-')[0]), int(month.split('-')[1])
+    start = f"{year}-{str(m).zfill(2)}-01"
+    # Hitung akhir bulan
+    next_m = m + 1 if m < 12 else 1
+    next_y = year if m < 12 else year + 1
+    end = f"{next_y}-{str(next_m).zfill(2)}-01"
+    return {"$gte": start, "$lt": end}
+
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
 logging.basicConfig(level=logging.INFO)
@@ -247,7 +257,11 @@ async def refresh_token(request: Request):
 # ==================== Health ====================
 @api_router.get("/health")
 async def health():
-    return {"status": "ok"}
+    try:
+        await db.command("ping")
+        return {"status": "ok", "db": "connected"}
+    except Exception as e:
+        raise HTTPException(503, f"Database unavailable: {str(e)}")
 
 # ==================== Categories ====================
 @api_router.get("/categories")
@@ -287,7 +301,7 @@ async def get_transactions(page: int = Query(1, ge=1), limit: int = Query(20, ge
     q = {"user_id": user["id"]}
     if type: q["type"] = type
     if category_id: q["category_id"] = category_id
-    if month: q["date"] = {"$regex": f"^{month}"}
+    if month: q["date"] = month_range_query(month)
     total = await db.transactions.count_documents(q)
     txs = await db.transactions.find(q, {"_id": 0}).sort(sort_by, -1 if sort_order == "desc" else 1).skip((page-1)*limit).limit(limit).to_list(limit)
     return {"transactions": txs, "total": total, "page": page, "limit": limit, "pages": max(1, (total+limit-1)//limit)}
@@ -351,7 +365,7 @@ async def delete_budget(bid: str, user: dict = Depends(get_current_user)):
 async def get_summary(month: Optional[str] = None, user: dict = Depends(get_current_user)):
     uid = user["id"]
     mq = {"user_id": uid}
-    if month: mq["date"] = {"$regex": f"^{month}"}
+    if month: mq["date"] = month_range_query(month)
     pipe = [{"$match": mq}, {"$group": {"_id": "$type", "total": {"$sum": "$amount"}}}]
     res = await db.transactions.aggregate(pipe).to_list(10)
     inc = sum(r["total"] for r in res if r["_id"] == "income")
@@ -366,15 +380,20 @@ async def get_summary(month: Optional[str] = None, user: dict = Depends(get_curr
 @api_router.get("/analytics/category-breakdown")
 async def get_breakdown(month: Optional[str] = None, type: str = "expense", user: dict = Depends(get_current_user)):
     q = {"user_id": user["id"], "type": type}
-    if month: q["date"] = {"$regex": f"^{month}"}
+    if month: q["date"] = month_range_query(month)
     pipe = [{"$match": q}, {"$group": {"_id": "$category_id", "total": {"$sum": "$amount"}}}, {"$sort": {"total": -1}}]
     res = await db.transactions.aggregate(pipe).to_list(50)
     gt = sum(r["total"] for r in res)
     bd = []
-    for r in res:
-        cat = await db.categories.find_one({"id": r["_id"]}, {"_id": 0})
-        if cat:
-            bd.append({"category_id": r["_id"], "category_name": cat["name"], "category_icon": cat["icon"], "category_color": cat["color"], "total": r["total"], "percentage": round(r["total"]/gt*100,1) if gt > 0 else 0})
+    if res:
+        cat_ids = [r["_id"] for r in res]
+        cats_list = await db.categories.find({"id": {"$in": cat_ids}}, {"_id": 0}).to_list(len(cat_ids))
+        cat_map = {c["id"]: c for c in cats_list}
+
+        for r in res:
+            cat = cat_map.get(r["_id"])
+            if cat:
+                bd.append({"category_id": r["_id"], "category_name": cat["name"], "category_icon": cat["icon"], "category_color": cat["color"], "total": r["total"], "percentage": round(r["total"]/gt*100,1) if gt > 0 else 0})
     return {"breakdown": bd, "total": gt}
 
 @api_router.get("/analytics/daily-trend")
@@ -402,7 +421,7 @@ async def get_monthly_trend(months: int = Query(6, ge=1, le=12), user: dict = De
         y = now.year
         while m <= 0: m += 12; y -= 1
         ms = f"{y}-{str(m).zfill(2)}"
-        pipe = [{"$match": {"user_id": user["id"], "date": {"$regex": f"^{ms}"}}}, {"$group": {"_id": "$type", "total": {"$sum": "$amount"}}}]
+        pipe = [{"$match": {"user_id": user["id"], "date": month_range_query(ms)}}, {"$group": {"_id": "$type", "total": {"$sum": "$amount"}}}]
         res = await db.transactions.aggregate(pipe).to_list(10)
         inc = sum(r["total"] for r in res if r["_id"] == "income")
         exp = sum(r["total"] for r in res if r["_id"] == "expense")
@@ -412,7 +431,7 @@ async def get_monthly_trend(months: int = Query(6, ge=1, le=12), user: dict = De
 @api_router.get("/analytics/stats")
 async def get_stats(month: Optional[str] = None, user: dict = Depends(get_current_user)):
     q = {"user_id": user["id"], "type": "expense"}
-    if month: q["date"] = {"$regex": f"^{month}"}
+    if month: q["date"] = month_range_query(month)
     pipe = [{"$match": q}, {"$addFields": {"day": {"$substr": ["$date", 0, 10]}}}, {"$group": {"_id": "$day", "total": {"$sum": "$amount"}}}]
     dr = await db.transactions.aggregate(pipe).to_list(31)
     if dr:
@@ -627,34 +646,33 @@ async def fetch_stock_price(ticker: str) -> Optional[dict]:
     
     return result
 
-# Debug endpoint to test stock data for a ticker
-@api_router.get("/portfolio/debug/{ticker}")
-async def debug_ticker(ticker: str):
-    if not ticker.endswith(".JK"):
-        ticker += ".JK"
-    result = await fetch_stock_price(ticker)
-    return {"ticker": ticker, "result": result}
 
 @api_router.post("/portfolio/update-prices")
 async def update_market_prices(user: dict = Depends(get_current_user)):
     uid = user["id"]
     u = await db.users.find_one({"id": uid})
     investments = u.get("investments", [])
+    tickers = [inv["ticker"] for inv in investments]
+    results = await asyncio.gather(
+        *[fetch_stock_price(t) for t in tickers],
+        return_exceptions=True
+    )
+    
     updated = []
-    for inv in investments:
-        ticker = inv["ticker"]
-        data = await fetch_stock_price(ticker)
-        if data and isinstance(data, dict):
-            doc = {
-                "ticker": ticker,
-                "price": data.get("price", 0.0),
-                "pbv": data.get("pbv", 0.0),
-                "roe": data.get("roe", 0.0),
-                "der": data.get("der", 0.0),
-                "updated_at": datetime.now(timezone.utc).isoformat()
-            }
-            await db.market_prices.update_one({"ticker": ticker}, {"$set": doc}, upsert=True)
-            updated.append(doc)
+    for ticker, data in zip(tickers, results):
+        if isinstance(data, Exception) or not data:
+            logger.warning(f"Skip {ticker}: {data}")
+            continue
+        doc = {
+            "ticker": ticker,
+            "price": data.get("price", 0.0),
+            "pbv": data.get("pbv", 0.0),
+            "roe": data.get("roe", 0.0),
+            "der": data.get("der", 0.0),
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.market_prices.update_one({"ticker": ticker}, {"$set": doc}, upsert=True)
+        updated.append(doc)
     return {"message": "Prices updated", "updated": updated}
 
 PRICE_STALE_SECONDS = 300  # 5 minutes
@@ -693,26 +711,41 @@ async def get_net_worth(user: dict = Depends(get_current_user)):
     u = await db.users.find_one({"id": uid})
     investments = u.get("investments", [])
     
+    if not investments:
+        return {
+            "liquid_asset": liquid_asset,
+            "total_investment_value": 0,
+            "total_asset_value": liquid_asset,
+            "total_unrealized_pl": 0,
+            "total_unrealized_pl_percentage": 0,
+            "holdings": []
+        }
+    
+    tickers = [inv["ticker"] for inv in investments]
+    prices_list = await db.market_prices.find({"ticker": {"$in": tickers}}, {"_id": 0}).to_list(len(tickers))
+    price_map = {p["ticker"]: p for p in prices_list}
+    
     # 3. Auto-refresh stale prices (older than 5 minutes)
     now = datetime.now(timezone.utc)
     stale_tickers = []
-    for inv in investments:
-        ticker = inv["ticker"]
-        market_data = await db.market_prices.find_one({"ticker": ticker})
+    for ticker_ in tickers:
+        market_data = price_map.get(ticker_)
         if not market_data:
-            stale_tickers.append(ticker)
+            stale_tickers.append(ticker_)
         else:
             try:
                 updated_at = datetime.fromisoformat(market_data["updated_at"].replace("Z", "+00:00"))
-                age = (now - updated_at).total_seconds()
-                if age > PRICE_STALE_SECONDS:
-                    stale_tickers.append(ticker)
+                if (now - updated_at).total_seconds() > PRICE_STALE_SECONDS:
+                    stale_tickers.append(ticker_)
             except Exception:
-                stale_tickers.append(ticker)
+                stale_tickers.append(ticker_)
     
     if stale_tickers:
         logger.info(f"Auto-refreshing {len(stale_tickers)} stale tickers: {stale_tickers}")
-        await asyncio.gather(*[_refresh_ticker_price(t) for t in stale_tickers])
+        fresh_results = await asyncio.gather(*[_refresh_ticker_price(t) for t in stale_tickers])
+        for doc in fresh_results:
+            if doc:
+                price_map[doc["ticker"]] = doc
 
     # 4. Build holdings with fresh data
     total_investment_value = 0
@@ -725,7 +758,7 @@ async def get_net_worth(user: dict = Depends(get_current_user)):
         avg_price = inv["average_buy_price"]
         shares = lot_count * 100
         
-        market_data = await db.market_prices.find_one({"ticker": ticker})
+        market_data = price_map.get(ticker)
         
         current_price = market_data["price"] if market_data else avg_price
         current_value = current_price * shares
@@ -848,7 +881,7 @@ async def delete_investment(ticker: str, user: dict = Depends(get_current_user))
 @api_router.get("/export/csv")
 async def export_csv(month: Optional[str] = None, user: dict = Depends(get_current_user)):
     q = {"user_id": user["id"]}
-    if month: q["date"] = {"$regex": f"^{month}"}
+    if month: q["date"] = month_range_query(month)
     txs = await db.transactions.find(q, {"_id": 0}).sort("date", -1).to_list(10000)
     cats = await db.categories.find({}, {"_id": 0}).to_list(100)
     cm = {c["id"]: c["name"] for c in cats}
@@ -888,7 +921,19 @@ async def reset_data(user: dict = Depends(get_current_user)):
     return {"message": "Data direset"}
 
 app.include_router(api_router)
-app.add_middleware(CORSMiddleware, allow_credentials=True, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+ALLOWED_ORIGINS = os.environ.get("ALLOWED_ORIGINS", "").split(",")
+# Untuk mobile app + dev, tambahkan origins berikut sebagai default fallback:
+DEFAULT_ORIGINS = ["exp://", "http://localhost:8081", "http://localhost:19006"]
+origins = [o.strip() for o in ALLOWED_ORIGINS if o.strip()] or DEFAULT_ORIGINS
+
+app.add_middleware(
+    CORSMiddleware, 
+    allow_credentials=True, 
+    allow_origins=origins, 
+    allow_methods=["GET", "POST", "PUT", "DELETE"], 
+    allow_headers=["Authorization", "Content-Type"]
+)
 
 @app.on_event("shutdown")
 async def shutdown():

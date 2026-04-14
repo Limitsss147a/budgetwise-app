@@ -353,7 +353,7 @@ export default function PortfolioScreen() {
             
             <TextInput
               style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]}
-              placeholder="Harga Rata-rata Beli"
+              placeholder="Harga Rata-rata Beli (per lembar)"
               placeholderTextColor={colors.textTertiary}
               value={priceInput}
               onChangeText={setPriceInput}

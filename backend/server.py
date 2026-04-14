@@ -589,8 +589,9 @@ async def fetch_google_finance_price(ticker: str) -> Optional[float]:
 
 async def fetch_stock_price(ticker: str) -> Optional[dict]:
     """
-    Combined fetch using yfinance with browser session (latest) 
-    and Google Finance scraper as fallback.
+    Improved fetch strategy:
+    1. Try Google Finance first (more reliable for IDX/IDR)
+    2. Try yfinance as fallback
     """
     y_ticker = ticker if '.JK' in ticker else f"{ticker}.JK"
     
@@ -601,47 +602,56 @@ async def fetch_stock_price(ticker: str) -> Optional[dict]:
         "der": 0.0
     }
 
-    # --- Strategy 1: yfinance with Browser Session ---
+    # --- Strategy 1: Google Finance (Fast & Accurate for IDX) ---
+    g_price = await fetch_google_finance_price(y_ticker)
+    if g_price and g_price > 0:
+        result["price"] = g_price
+        logger.info(f"Price for {ticker} fetched from Google: {g_price}")
+
+    # --- Strategy 2: yfinance (Fallback and for Fundamentals) ---
     try:
         def _get_yf():
             session = requests.Session()
-            session.headers.update(random.choice(USER_AGENTS))
-            # Just use the raw User-Agent string from the list
+            # Rotate UA to avoid blocks
             ua = random.choice(USER_AGENTS)
             session.headers.update({"User-Agent": ua})
             
             stock = yf.Ticker(y_ticker, session=session)
-            # Use info for everything (slower but comprehensive)
-            info = stock.info
+            # Use fast_info for price as it's more reliable than .info
+            fast = stock.fast_info
+            price = fast.get("last_price") or fast.get("regular_market_previous_close")
             
-            price = info.get("regularMarketPrice") or info.get("currentPrice") or info.get("previousClose")
-            pbv = info.get("priceToBook", 0.0)
-            roe = info.get("returnOnEquity", 0.0)
-            der = info.get("debtToEquity", 0.0)
+            # Fundamentals still need .info or other methods
+            pbv, roe, der = 0.0, 0.0, 0.0
+            if not result["price"]: # Only do heavy .info if we lack price
+                info = stock.info
+                pbv = info.get("priceToBook", 0.0)
+                roe = info.get("returnOnEquity", 0.0)
+                der = info.get("debtToEquity", 0.0)
+                if not result["price"]:
+                    price = info.get("currentPrice") or info.get("regularMarketPrice") or price
             
             return {
-                "price": float(price) if price else None,
+                "price": float(price) if price and price > 0 else None,
                 "pbv": float(pbv) if pbv else 0.0,
                 "roe": float(roe) if roe else 0.0,
                 "der": float(der) if der else 0.0
             }
 
         yf_data = await asyncio.to_thread(_get_yf)
-        if yf_data and yf_data["price"]:
-            result.update(yf_data)
-            logger.info(f"Fetched {ticker} from yfinance: price={result['price']}")
+        if yf_data:
+            if not result["price"] and yf_data["price"]:
+                result["price"] = yf_data["price"]
+            # Update fundamentals if fetched
+            if yf_data["pbv"]: result["pbv"] = yf_data["pbv"]
+            if yf_data["roe"]: result["roe"] = yf_data["roe"]
+            if yf_data["der"]: result["der"] = yf_data["der"]
+            
     except Exception as e:
-        logger.warning(f"yfinance failed for {ticker}: {str(e)}")
+        logger.warning(f"yfinance fallback failed for {ticker}: {str(e)}")
 
-    # --- Strategy 2: Google Finance Fallback (Price Only) ---
-    if not result["price"]:
-        g_price = await fetch_google_finance_price(y_ticker)
-        if g_price:
-            result["price"] = g_price
-            logger.info(f"Price for {ticker} fetched from Google: {g_price}")
-
-    if not result["price"]:
-        logger.error(f"Failed to fetch price for {ticker} from all sources")
+    if not result["price"] or result["price"] <= 0:
+        logger.error(f"Failed to fetch valid price for {ticker} from all sources")
         return None
     
     return result
@@ -759,8 +769,12 @@ async def get_net_worth(user: dict = Depends(get_current_user)):
         shares = lot_count * 100
         
         market_data = price_map.get(ticker)
+        market_data = market_data or {}
         
-        current_price = market_data["price"] if market_data else avg_price
+        # FIX: If price is 0 or missing, fallback to avg_price to avoid -100% P/L errors
+        current_m_price = market_data.get("price", 0)
+        current_price = current_m_price if current_m_price > 0 else avg_price
+        
         current_value = current_price * shares
         total_cost = avg_price * shares
         pl = current_value - total_cost
@@ -777,13 +791,14 @@ async def get_net_worth(user: dict = Depends(get_current_user)):
             "total_value": current_value,
             "unrealized_pl": pl,
             "unrealized_pl_percentage": (pl / total_cost * 100) if total_cost > 0 else 0,
-            "pbv": market_data["pbv"] if market_data else None,
-            "roe": market_data["roe"] if market_data else None,
-            "der": market_data["der"] if market_data else None,
-            "updated_at": market_data["updated_at"] if market_data else None
+            "pbv": market_data.get("pbv"),
+            "roe": market_data.get("roe"),
+            "der": market_data.get("der"),
+            "updated_at": market_data.get("updated_at")
         })
 
-    total_cost_all = sum(h["average_buy_price"] * h["shares"] for h in holdings)
+    # Calculate total cost based on all holdings to get accurate total percentage
+    total_cost_all = sum(inv["average_buy_price"] * (inv["lot_count"] * 100) for inv in investments)
     total_asset_value = liquid_asset + total_investment_value
 
     return {

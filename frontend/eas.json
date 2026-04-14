@@ -14,7 +14,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_BACKEND_URL": "$EXPO_PUBLIC_BACKEND_URL"
+        "EXPO_PUBLIC_BACKEND_URL": "https://budgetwise-app-production-ddb7.up.railway.app"
       },
       "node": "20.18.0"
     },

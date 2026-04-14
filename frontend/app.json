@@ -4,7 +4,7 @@
     "slug": "budgetwise",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/budgetwise-logo.png",
     "scheme": "frontend",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -17,8 +17,8 @@
     "android": {
       "package": "com.limitsss.budgetwise",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#000"
+        "foregroundImage": "./assets/images/budgetwise-logo.png",
+        "backgroundColor": "#0A1210"
       },
       "edgeToEdgeEnabled": true,
       "permissions": [
@@ -32,17 +32,17 @@
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/budgetwise-logo.png"
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-image.png",
+          "image": "./assets/images/budgetwise-logo.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#000"
+          "backgroundColor": "#0A1210"
         }
       ],
       "expo-secure-store",
@@ -50,7 +50,7 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/images/icon.png",
+          "icon": "./assets/images/budgetwise-logo.png",
           "color": "#1A4D2E"
         }
       ]

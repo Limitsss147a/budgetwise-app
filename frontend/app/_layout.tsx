@@ -1,6 +1,6 @@
 import { Stack, useRouter, useSegments } from 'expo-router';
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Platform, Animated, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
@@ -161,6 +161,52 @@ function AuthGate() {
   );
 }
 
+function AnimatedSplashWrapper({ children }: { children: React.ReactNode }) {
+  const { isLoading } = useAuth();
+  const [isAnimationComplete, setAnimationComplete] = useState(false);
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    // Only dismiss native splash and start animation when auth state is resolved!
+    if (!isLoading) {
+      SplashScreen.hideAsync().catch(() => {});
+      Animated.sequence([
+        Animated.delay(200), // Hold for a moment to ensure underlying screen is fully rendered
+        Animated.parallel([
+          Animated.timing(fadeAnim, {
+            toValue: 0,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+          Animated.timing(scaleAnim, {
+            toValue: 1.15,
+            duration: 800,
+            useNativeDriver: true,
+          })
+        ])
+      ]).start(() => setAnimationComplete(true));
+    }
+  }, [isLoading]);
+
+  return (
+    <View style={{ flex: 1 }}>
+      {children}
+      {!isAnimationComplete && (
+        <Animated.View pointerEvents="none" style={[
+          StyleSheet.absoluteFill, 
+          { backgroundColor: '#0A1210', opacity: fadeAnim, justifyContent: 'center', alignItems: 'center', zIndex: 99999 }
+        ]}>
+          <Animated.Image 
+            source={require('../assets/images/budgetwise-logo.png')}
+            style={{ width: 200, height: 200, resizeMode: 'contain', transform: [{ scale: scaleAnim }] }}
+          />
+        </Animated.View>
+      )}
+    </View>
+  );
+}
+
 import Toast from 'react-native-toast-message';
 
 export default function RootLayout() {
@@ -172,11 +218,7 @@ export default function RootLayout() {
     ...Ionicons.font,
   });
 
-  useEffect(() => {
-    if (fontsLoaded) {
-      SplashScreen.hideAsync();
-    }
-  }, [fontsLoaded]);
+  // Native splash will be hidden by AnimatedSplashWrapper instead
 
   if (!fontsLoaded) {
     return null;
@@ -185,8 +227,10 @@ export default function RootLayout() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <AuthGate />
-        <Toast />
+        <AnimatedSplashWrapper>
+          <AuthGate />
+          <Toast />
+        </AnimatedSplashWrapper>
       </AuthProvider>
     </ThemeProvider>
   );

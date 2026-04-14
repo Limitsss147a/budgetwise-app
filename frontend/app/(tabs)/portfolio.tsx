@@ -259,7 +259,7 @@ export default function PortfolioScreen() {
                   <View style={{ marginTop: 16, alignItems: 'center' }}>
                     <Text style={styles.nwItemLabel}>Total Unrealized P/L</Text>
                     <Text style={[styles.nwItemVal, { color: (data?.total_unrealized_pl || 0) >= 0 ? '#4ADE80' : '#FB7185' }]}>
-                      {(data?.total_unrealized_pl || 0) >= 0 ? '+' : ''}{formatRupiah(data?.total_unrealized_pl || 0)} ({(data?.total_unrealized_pl_percentage || 0).toFixed(2)}%)
+                      {(data?.total_unrealized_pl || 0) >= 0 ? '+' : '-'}{formatRupiah(data?.total_unrealized_pl || 0)} ({(data?.total_unrealized_pl_percentage || 0).toFixed(2)}%)
                     </Text>
                   </View>
                 </LinearGradient>

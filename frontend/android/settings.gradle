@@ -1,13 +1,4 @@
 pluginManagement {
-  repositories {
-    maven { url 'http://maven.aliyun.com/repository/public/'; allowInsecureProtocol true }
-    maven { url 'http://maven.aliyun.com/repository/google/'; allowInsecureProtocol true }
-    maven { url 'http://maven.aliyun.com/repository/gradle-plugin/'; allowInsecureProtocol true }
-    maven { url 'http://plugins.gradle.org/m2/'; allowInsecureProtocol true }
-    maven { url 'http://dl.google.com/dl/android/maven2'; allowInsecureProtocol true }
-    maven { url 'http://repo.maven.apache.org/maven2'; allowInsecureProtocol true }
-  }
-
   def reactNativeGradlePlugin = new File(
     providers.exec {
       workingDir(rootDir)

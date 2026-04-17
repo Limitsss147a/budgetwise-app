@@ -39,6 +39,14 @@ api_router = APIRouter(prefix="/api")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 # ==================== Auth Helpers ====================
 def hash_password(pw: str) -> str:
     return bcrypt.hashpw(pw.encode(), bcrypt.gensalt()).decode()
@@ -195,27 +203,32 @@ async def startup():
         await db.categories.insert_many(cats)
         logger.info(f"Seeded {len(cats)} categories")
     # Seed admin
-    admin_email = os.environ.get("ADMIN_EMAIL", "admin@example.com")
-    admin_pw = os.environ.get("ADMIN_PASSWORD", "admin123")
-    admin = await db.users.find_one({"email": admin_email})
-    if not admin:
-        admin_id = str(uuid.uuid4())
-        await db.users.insert_one({"id": admin_id, "email": admin_email, "password_hash": hash_password(admin_pw), "name": "Admin", "role": "admin", "created_at": datetime.now(timezone.utc).isoformat()})
-        # Create default settings for admin
-        await db.settings.insert_one({"user_id": admin_id, "currency": "IDR", "theme": "light", "pin_hash": ""})
-        logger.info("Admin user seeded")
+    admin_email = os.environ.get("ADMIN_EMAIL", "")
+    admin_pw = os.environ.get("ADMIN_PASSWORD", "")
+
+    if not admin_email or not admin_pw:
+        logger.warning("⚠️  ADMIN_EMAIL / ADMIN_PASSWORD env tidak diset — admin seed dilewati")
     else:
-        admin_id = admin.get("id", "")
-        if not verify_password(admin_pw, admin.get("password_hash", "")):
-            await db.users.update_one({"email": admin_email}, {"$set": {"password_hash": hash_password(admin_pw)}})
-    # Migrate unowned data to admin
-    if admin_id:
-        await db.transactions.update_many({"user_id": {"$exists": False}}, {"$set": {"user_id": admin_id}})
-        await db.budgets.update_many({"user_id": {"$exists": False}}, {"$set": {"user_id": admin_id}})
+        admin = await db.users.find_one({"email": admin_email})
+        if not admin:
+            admin_id = str(uuid.uuid4())
+            await db.users.insert_one({"id": admin_id, "email": admin_email, "password_hash": hash_password(admin_pw), "name": "Admin", "role": "admin", "created_at": datetime.now(timezone.utc).isoformat()})
+            # Create default settings for admin
+            await db.settings.insert_one({"user_id": admin_id, "currency": "IDR", "theme": "light", "pin_hash": ""})
+            logger.info("Admin user seeded")
+        else:
+            admin_id = admin.get("id", "")
+            if not verify_password(admin_pw, admin.get("password_hash", "")):
+                await db.users.update_one({"email": admin_email}, {"$set": {"password_hash": hash_password(admin_pw)}})
+        # Migrate unowned data to admin
+        if admin_id:
+            await db.transactions.update_many({"user_id": {"$exists": False}}, {"$set": {"user_id": admin_id}})
+            await db.budgets.update_many({"user_id": {"$exists": False}}, {"$set": {"user_id": admin_id}})
 
 # ==================== Auth Endpoints ====================
 @api_router.post("/auth/register")
-async def register(data: AuthRegister):
+@limiter.limit("5/minute")
+async def register(request: Request, data: AuthRegister):
     email = data.email.lower().strip()
     if await db.users.find_one({"email": email}):
         raise HTTPException(400, "Email sudah terdaftar")
@@ -228,7 +241,8 @@ async def register(data: AuthRegister):
     return {"user": {"id": user_id, "email": email, "name": data.name.strip(), "role": "user"}, "access_token": create_access_token(user_id, email), "refresh_token": create_refresh_token(user_id)}
 
 @api_router.post("/auth/login")
-async def login(data: AuthLogin):
+@limiter.limit("10/minute")
+async def login(request: Request, data: AuthLogin):
     email = data.email.lower().strip()
     user = await db.users.find_one({"email": email})
     if not user or not verify_password(data.password, user["password_hash"]):

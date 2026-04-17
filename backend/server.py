@@ -222,8 +222,21 @@ async def startup():
                 await db.users.update_one({"email": admin_email}, {"$set": {"password_hash": hash_password(admin_pw)}})
         # Migrate unowned data to admin
         if admin_id:
-            await db.transactions.update_many({"user_id": {"$exists": False}}, {"$set": {"user_id": admin_id}})
-            await db.budgets.update_many({"user_id": {"$exists": False}}, {"$set": {"user_id": admin_id}})
+            env = os.environ.get("ENVIRONMENT", "production")
+            if env != "production":
+                orphan_count = await db.transactions.count_documents({"user_id": {"$exists": False}})
+                if orphan_count > 0:
+                    logger.warning(f"Found {orphan_count} orphan transactions — migration skipped in production")
+                    # Hanya assign jika benar-benar environment dev
+                    if env == "development":
+                        await db.transactions.update_many(
+                            {"user_id": {"$exists": False}},
+                            {"$set": {"user_id": admin_id}}
+                        )
+                        await db.budgets.update_many(
+                            {"user_id": {"$exists": False}},
+                            {"$set": {"user_id": admin_id}}
+                        )
     
     # Migrate investments to separate collection
     await db.users.update_many({}, {"$unset": {"investments": ""}})
@@ -605,73 +618,53 @@ async def fetch_google_finance_price(ticker: str) -> Optional[float]:
     return None
 
 async def fetch_stock_price(ticker: str) -> Optional[dict]:
-    """
-    Improved fetch strategy:
-    1. Try Google Finance first (more reliable for IDX/IDR)
-    2. Try yfinance as fallback
-    """
     y_ticker = ticker if '.JK' in ticker else f"{ticker}.JK"
-    
-    result = {
-        "price": None,
-        "pbv": 0.0,
-        "roe": 0.0,
-        "der": 0.0
-    }
+    result = {"price": None, "pbv": 0.0, "roe": 0.0, "der": 0.0}
 
-    # --- Strategy 1: Google Finance (Fast & Accurate for IDX) ---
-    g_price = await fetch_google_finance_price(y_ticker)
-    if g_price and g_price > 0:
-        result["price"] = g_price
-        logger.info(f"Price for {ticker} fetched from Google: {g_price}")
+    def _get_yf():
+        session = requests.Session()
+        ua = random.choice(USER_AGENTS)
+        session.headers.update({"User-Agent": ua})
+        stock = yf.Ticker(y_ticker, session=session)
+        fast = stock.fast_info
+        price = fast.get("last_price") or fast.get("regular_market_previous_close")
+        info = stock.info
+        pbv = info.get("priceToBook", 0.0)
+        roe = info.get("returnOnEquity", 0.0)
+        der = info.get("debtToEquity", 0.0)
+        if not price:
+            price = info.get("currentPrice") or info.get("regularMarketPrice")
+        return {
+            "price": float(price) if price and price > 0 else None,
+            "pbv": float(pbv) if pbv else 0.0,
+            "roe": float(roe) if roe else 0.0,
+            "der": float(der) if der else 0.0
+        }
 
-    # --- Strategy 2: yfinance (Fallback and for Fundamentals) ---
+    # Beri total timeout 15 detik per ticker
     try:
-        def _get_yf():
-            session = requests.Session()
-            # Rotate UA to avoid blocks
-            ua = random.choice(USER_AGENTS)
-            session.headers.update({"User-Agent": ua})
-            
-            stock = yf.Ticker(y_ticker, session=session)
-            # Use fast_info for price as it's more reliable than .info
-            fast = stock.fast_info
-            price = fast.get("last_price") or fast.get("regular_market_previous_close")
-            
-            # Fundamentals still need .info or other methods
-            pbv, roe, der = 0.0, 0.0, 0.0
-            if not result["price"]: # Only do heavy .info if we lack price
-                info = stock.info
-                pbv = info.get("priceToBook", 0.0)
-                roe = info.get("returnOnEquity", 0.0)
-                der = info.get("debtToEquity", 0.0)
-                if not result["price"]:
-                    price = info.get("currentPrice") or info.get("regularMarketPrice") or price
-            
-            return {
-                "price": float(price) if price and price > 0 else None,
-                "pbv": float(pbv) if pbv else 0.0,
-                "roe": float(roe) if roe else 0.0,
-                "der": float(der) if der else 0.0
-            }
+        async with asyncio.timeout(15):
+            # Strategy 1: yfinance
+            try:
+                yf_data = await asyncio.to_thread(_get_yf)
+                if yf_data and yf_data["price"]:
+                    result.update(yf_data)
+                    return result
+            except Exception as e:
+                logger.warning(f"yfinance failed for {ticker}: {e}")
 
-        yf_data = await asyncio.to_thread(_get_yf)
-        if yf_data:
-            if not result["price"] and yf_data["price"]:
-                result["price"] = yf_data["price"]
-            # Update fundamentals if fetched
-            if yf_data["pbv"]: result["pbv"] = yf_data["pbv"]
-            if yf_data["roe"]: result["roe"] = yf_data["roe"]
-            if yf_data["der"]: result["der"] = yf_data["der"]
-            
-    except Exception as e:
-        logger.warning(f"yfinance fallback failed for {ticker}: {str(e)}")
+            # Strategy 2: Google Finance fallback
+            g_price = await fetch_google_finance_price(y_ticker)
+            if g_price:
+                result["price"] = g_price
+                return result
 
-    if not result["price"] or result["price"] <= 0:
-        logger.error(f"Failed to fetch valid price for {ticker} from all sources")
+    except asyncio.TimeoutError:
+        logger.error(f"Timeout fetching price for {ticker} (>15s)")
         return None
-    
-    return result
+
+    logger.error(f"All price sources failed for {ticker}")
+    return None
 
 
 @api_router.post("/portfolio/update-prices")

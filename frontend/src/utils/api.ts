@@ -1,7 +1,17 @@
+import { SafeStorage } from './storage';
+import type {
+  Category, Transaction, Budget, Settings, Summary,
+  CategoryBreakdown, DailyTrend, MonthlyTrend, TransactionListResponse
+} from '../types';
+
 const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
 let authToken: string | null = null;
 export function setAuthToken(token: string | null) { authToken = token; }
+
+let isRefreshing = false;
+let refreshToken: string | null = null;
+export function setRefreshToken(token: string | null) { refreshToken = token; }
 
 async function request(path: string, options: RequestInit = {}) {
   const url = `${BASE_URL}${path}`;
@@ -9,6 +19,28 @@ async function request(path: string, options: RequestInit = {}) {
   if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
   if (options.headers) Object.assign(headers, options.headers);
   const response = await fetch(url, { ...options, headers });
+
+  if (response.status === 401 && !path.includes('/auth/') && refreshToken && !isRefreshing) {
+    isRefreshing = true;
+    try {
+      const res = await fetch(`${BASE_URL}/api/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAuthToken(data.access_token);
+        await SafeStorage.setItem('access_token', data.access_token);
+        // Retry original request dengan token baru
+        headers['Authorization'] = `Bearer ${data.access_token}`;
+        isRefreshing = false;
+        return fetch(url, { ...options, headers }).then(r => r.json());
+      }
+    } catch {}
+    isRefreshing = false;
+  }
+
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Terjadi kesalahan' }));
     throw new Error(typeof error.detail === 'string' ? error.detail : `HTTP ${response.status}`);
@@ -19,49 +51,49 @@ async function request(path: string, options: RequestInit = {}) {
 }
 
 export const api = {
-  getCategories: (type?: string) => request(`/api/categories${type ? `?type=${type}` : ''}`),
-  createCategory: (data: any) => request('/api/categories', { method: 'POST', body: JSON.stringify(data) }),
-  updateCategory: (id: string, data: any) => request(`/api/categories/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  deleteCategory: (id: string) => request(`/api/categories/${id}`, { method: 'DELETE' }),
+  getCategories: (type?: string): Promise<Category[]> => request(`/api/categories${type ? `?type=${type}` : ''}`),
+  createCategory: (data: any): Promise<Category> => request('/api/categories', { method: 'POST', body: JSON.stringify(data) }),
+  updateCategory: (id: string, data: any): Promise<Category> => request(`/api/categories/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteCategory: (id: string): Promise<{message: string}> => request(`/api/categories/${id}`, { method: 'DELETE' }),
 
-  getTransactions: (params?: Record<string, any>) => {
+  getTransactions: (params?: Record<string, any>): Promise<TransactionListResponse> => {
     const q = params ? '?' + new URLSearchParams(Object.entries(params).reduce((a, [k, v]) => { if (v != null && v !== '') a[k] = String(v); return a; }, {} as Record<string, string>)).toString() : '';
     return request(`/api/transactions${q}`);
   },
-  getTransaction: (id: string) => request(`/api/transactions/${id}`),
-  createTransaction: (data: any) => request('/api/transactions', { method: 'POST', body: JSON.stringify(data) }),
-  updateTransaction: (id: string, data: any) => request(`/api/transactions/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  deleteTransaction: (id: string) => request(`/api/transactions/${id}`, { method: 'DELETE' }),
+  getTransaction: (id: string): Promise<Transaction> => request(`/api/transactions/${id}`),
+  createTransaction: (data: Omit<Transaction, 'id' | 'created_at' | 'updated_at'>): Promise<Transaction> => request('/api/transactions', { method: 'POST', body: JSON.stringify(data) }),
+  updateTransaction: (id: string, data: Partial<Transaction>): Promise<Transaction> => request(`/api/transactions/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteTransaction: (id: string): Promise<{message: string}> => request(`/api/transactions/${id}`, { method: 'DELETE' }),
 
-  getBudgets: (month?: string) => request(`/api/budgets${month ? `?month=${month}` : ''}`),
-  createBudget: (data: any) => request('/api/budgets', { method: 'POST', body: JSON.stringify(data) }),
-  deleteBudget: (id: string) => request(`/api/budgets/${id}`, { method: 'DELETE' }),
+  getBudgets: (month?: string): Promise<Budget[]> => request(`/api/budgets${month ? `?month=${month}` : ''}`),
+  createBudget: (data: Omit<Budget, 'id' | 'created_at' | 'updated_at'>): Promise<Budget> => request('/api/budgets', { method: 'POST', body: JSON.stringify(data) }),
+  deleteBudget: (id: string): Promise<{message: string}> => request(`/api/budgets/${id}`, { method: 'DELETE' }),
 
-  getSummary: (month?: string) => request(`/api/analytics/summary${month ? `?month=${month}` : ''}`),
-  getCategoryBreakdown: (month?: string, type?: string) => {
+  getSummary: (month?: string): Promise<Summary> => request(`/api/analytics/summary${month ? `?month=${month}` : ''}`),
+  getCategoryBreakdown: (month?: string, type?: string): Promise<{breakdown: CategoryBreakdown[], total: number}> => {
     const p = new URLSearchParams(); if (month) p.set('month', month); if (type) p.set('type', type);
     return request(`/api/analytics/category-breakdown${p.toString() ? `?${p}` : ''}`);
   },
-  getDailyTrend: (days?: number) => request(`/api/analytics/daily-trend${days ? `?days=${days}` : ''}`),
-  getMonthlyTrend: (months?: number) => request(`/api/analytics/monthly-trend${months ? `?months=${months}` : ''}`),
-  getStats: (month?: string) => request(`/api/analytics/stats${month ? `?month=${month}` : ''}`),
-  getWeeklyReport: () => request('/api/reports/weekly'),
+  getDailyTrend: (days?: number): Promise<DailyTrend[]> => request(`/api/analytics/daily-trend${days ? `?days=${days}` : ''}`),
+  getMonthlyTrend: (months?: number): Promise<MonthlyTrend[]> => request(`/api/analytics/monthly-trend${months ? `?months=${months}` : ''}`),
+  getStats: (month?: string): Promise<{avg_daily_expense: number, highest_day: string, highest_day_amount: number, days_with_expense: number}> => request(`/api/analytics/stats${month ? `?month=${month}` : ''}`),
+  getWeeklyReport: (): Promise<any> => request('/api/reports/weekly'),
 
-  getSettings: () => request('/api/settings'),
-  updateSettings: (data: any) => request('/api/settings', { method: 'PUT', body: JSON.stringify(data) }),
-  setPin: (pin: string) => request('/api/settings/pin/set', { method: 'POST', body: JSON.stringify({ pin }) }),
-  verifyPin: (pin: string) => request('/api/settings/pin/verify', { method: 'POST', body: JSON.stringify({ pin }) }),
-  removePin: () => request('/api/settings/pin', { method: 'DELETE' }),
-  registerPushToken: (token: string) => request('/api/notifications/register', { method: 'POST', body: JSON.stringify({ token }) }),
+  getSettings: (): Promise<Settings> => request('/api/settings'),
+  updateSettings: (data: Partial<Settings>): Promise<Settings> => request('/api/settings', { method: 'PUT', body: JSON.stringify(data) }),
+  setPin: (pin: string): Promise<{message: string, has_pin: boolean}> => request('/api/settings/pin/set', { method: 'POST', body: JSON.stringify({ pin }) }),
+  verifyPin: (pin: string): Promise<{valid: boolean}> => request('/api/settings/pin/verify', { method: 'POST', body: JSON.stringify({ pin }) }),
+  removePin: (): Promise<{message: string, has_pin: boolean}> => request('/api/settings/pin', { method: 'DELETE' }),
+  registerPushToken: (token: string): Promise<{message: string}> => request('/api/notifications/register', { method: 'POST', body: JSON.stringify({ token }) }),
 
-  getExportCsvUrl: (month?: string) => `${BASE_URL}/api/export/csv${month ? `?month=${month}` : ''}`,
-  getBackup: () => request('/api/export/backup'),
-  importBackup: (data: any) => request('/api/import/backup', { method: 'POST', body: JSON.stringify(data) }),
-  resetData: () => request('/api/data/reset', { method: 'DELETE' }),
+  getExportCsvUrl: (month?: string): string => `${BASE_URL}/api/export/csv${month ? `?month=${month}` : ''}`,
+  getBackup: (): Promise<any> => request('/api/export/backup'),
+  importBackup: (data: any): Promise<{message: string}> => request('/api/import/backup', { method: 'POST', body: JSON.stringify(data) }),
+  resetData: (): Promise<{message: string}> => request('/api/data/reset', { method: 'DELETE' }),
 
-  updateMarketPrices: () => request('/api/portfolio/update-prices', { method: 'POST' }),
-  getNetWorth: () => request('/api/portfolio/net-worth'),
-  addInvestment: (data: { ticker: string, lot_count: number, average_buy_price: number }) => request('/api/portfolio/investments', { method: 'POST', body: JSON.stringify(data) }),
-  updateInvestment: (ticker: string, data: { lot_count?: number, average_buy_price?: number }) => request(`/api/portfolio/investments/${encodeURIComponent(ticker)}`, { method: 'PUT', body: JSON.stringify(data) }),
-  deleteInvestment: (ticker: string) => request(`/api/portfolio/investments/${encodeURIComponent(ticker)}`, { method: 'DELETE' }),
+  updateMarketPrices: (): Promise<{message: string, updated: any[]}> => request('/api/portfolio/update-prices', { method: 'POST' }),
+  getNetWorth: (): Promise<{liquid_asset: number, total_investment_value: number, total_asset_value: number, total_unrealized_pl: number, total_unrealized_pl_percentage: number, holdings: any[]}> => request('/api/portfolio/net-worth'),
+  addInvestment: (data: { ticker: string, lot_count: number, average_buy_price: number }): Promise<{message: string, investments: any[]}> => request('/api/portfolio/investments', { method: 'POST', body: JSON.stringify(data) }),
+  updateInvestment: (ticker: string, data: { lot_count?: number, average_buy_price?: number }): Promise<{message: string, investments: any[]}> => request(`/api/portfolio/investments/${encodeURIComponent(ticker)}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteInvestment: (ticker: string): Promise<{message: string}> => request(`/api/portfolio/investments/${encodeURIComponent(ticker)}`, { method: 'DELETE' }),
 };

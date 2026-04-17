@@ -224,6 +224,9 @@ async def startup():
         if admin_id:
             await db.transactions.update_many({"user_id": {"$exists": False}}, {"$set": {"user_id": admin_id}})
             await db.budgets.update_many({"user_id": {"$exists": False}}, {"$set": {"user_id": admin_id}})
+    
+    # Migrate investments to separate collection
+    await db.users.update_many({}, {"$unset": {"investments": ""}})
 
 # ==================== Auth Endpoints ====================
 @api_router.post("/auth/register")
@@ -674,8 +677,7 @@ async def fetch_stock_price(ticker: str) -> Optional[dict]:
 @api_router.post("/portfolio/update-prices")
 async def update_market_prices(user: dict = Depends(get_current_user)):
     uid = user["id"]
-    u = await db.users.find_one({"id": uid})
-    investments = u.get("investments", [])
+    investments = await db.investments.find({"user_id": uid}, {"_id": 0}).to_list(100)
     tickers = [inv["ticker"] for inv in investments]
     results = await asyncio.gather(
         *[fetch_stock_price(t) for t in tickers],
@@ -732,8 +734,7 @@ async def get_net_worth(user: dict = Depends(get_current_user)):
     liquid_asset = inc - exp
 
     # 2. Get investments
-    u = await db.users.find_one({"id": uid})
-    investments = u.get("investments", [])
+    investments = await db.investments.find({"user_id": uid}, {"_id": 0}).to_list(100)
     
     if not investments:
         return {
@@ -831,33 +832,33 @@ async def add_investment(data: InvestmentCreate, user: dict = Depends(get_curren
     if ticker and not ticker.endswith(".JK"):
         ticker += ".JK"
         
-    u = await db.users.find_one({"id": uid})
-    investments = u.get("investments", [])
-    
-    found = False
-    for inv in investments:
-        if inv["ticker"] == ticker:
-            total_shares_old = inv["lot_count"] * 100
-            total_cost_old = total_shares_old * inv["average_buy_price"]
-            total_shares_new = data.lot_count * 100
-            total_cost_new = total_shares_new * data.average_buy_price
-            
-            inv["lot_count"] += data.lot_count
-            new_shares = (inv["lot_count"] * 100)
-            inv["average_buy_price"] = (total_cost_old + total_cost_new) / new_shares if new_shares > 0 else 0
-            found = True
-            break
-            
-    if not found:
-        investments.append({
+    inv = await db.investments.find_one({"user_id": uid, "ticker": ticker})
+        
+    if inv:
+        total_shares_old = inv["lot_count"] * 100
+        total_cost_old = total_shares_old * inv["average_buy_price"]
+        total_shares_new = data.lot_count * 100
+        total_cost_new = total_shares_new * data.average_buy_price
+        
+        lot_count = inv["lot_count"] + data.lot_count
+        new_shares = lot_count * 100
+        avg_price = (total_cost_old + total_cost_new) / new_shares if new_shares > 0 else 0
+        
+        await db.investments.update_one(
+            {"user_id": uid, "ticker": ticker},
+            {"$set": {"lot_count": lot_count, "average_buy_price": avg_price}}
+        )
+    else:
+        await db.investments.insert_one({
             "id": str(uuid.uuid4()),
+            "user_id": uid,
             "ticker": ticker,
             "lot_count": data.lot_count,
             "average_buy_price": data.average_buy_price,
             "created_at": datetime.now(timezone.utc).isoformat()
         })
         
-    await db.users.update_one({"id": uid}, {"$set": {"investments": investments}})
+    investments = await db.investments.find({"user_id": uid}, {"_id": 0}).to_list(100)
     
     # Immediately fetch price for this ticker to ensure UI has data
     price_data = await fetch_stock_price(ticker)
@@ -877,33 +878,29 @@ async def add_investment(data: InvestmentCreate, user: dict = Depends(get_curren
 @api_router.put("/portfolio/investments/{ticker:path}")
 async def update_investment(ticker: str, data: InvestmentUpdate, user: dict = Depends(get_current_user)):
     uid = user["id"]
-    u = await db.users.find_one({"id": uid})
-    investments = u.get("investments", [])
-    
-    found = False
     target_ticker = ticker.upper().strip()
-    for inv in investments:
-        if inv["ticker"] == target_ticker:
-            if data.lot_count is not None:
-                inv["lot_count"] = data.lot_count
-            if data.average_buy_price is not None:
-                inv["average_buy_price"] = data.average_buy_price
-            found = True
-            break
-            
-    if not found:
+    
+    inv = await db.investments.find_one({"user_id": uid, "ticker": target_ticker})
+    if not inv:
         raise HTTPException(404, "Investment not found")
         
-    await db.users.update_one({"id": uid}, {"$set": {"investments": investments}})
+    upd = {}
+    if data.lot_count is not None:
+        upd["lot_count"] = data.lot_count
+    if data.average_buy_price is not None:
+        upd["average_buy_price"] = data.average_buy_price
+        
+    if upd:
+        await db.investments.update_one({"user_id": uid, "ticker": target_ticker}, {"$set": upd})
+        
+    investments = await db.investments.find({"user_id": uid}, {"_id": 0}).to_list(100)
     return {"message": "Investment updated", "investments": investments}
     
 @api_router.delete("/portfolio/investments/{ticker:path}")
 async def delete_investment(ticker: str, user: dict = Depends(get_current_user)):
     uid = user["id"]
     target_ticker = ticker.upper().strip()
-    u = await db.users.find_one({"id": uid})
-    investments = [inv for inv in u.get("investments", []) if inv["ticker"] != target_ticker]
-    await db.users.update_one({"id": uid}, {"$set": {"investments": investments}})
+    await db.investments.delete_one({"user_id": uid, "ticker": target_ticker})
     return {"message": "Investment removed"}
 
 # ==================== Export ====================

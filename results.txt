@@ -1,0 +1,10 @@
+DB NAME: budgetwise-prod
+Collections: ['budgets', 'investments', 'settings', 'users', 'market_prices', 'transactions', 'categories']
+Collection budgets: 2 documents
+Collection investments: 0 documents
+Collection settings: 2 documents
+Collection users: 2 documents
+Collection market_prices: 7 documents
+Collection transactions: 22 documents
+Collection categories: 14 documents
+User keys: dict_keys(['_id', 'id', 'email', 'password_hash', 'name', 'role', 'created_at'])

@@ -246,7 +246,23 @@ async def startup():
                         )
     
     # Migrate investments to separate collection
-    await db.users.update_many({}, {"$unset": {"investments": ""}})
+    # Safe Migration: Copy investments from users docs to separate collection if they exist
+    users_with_inv = await db.users.find({"investments": {"$exists": True}}).to_list(None)
+    for u in users_with_inv:
+        uid = u.get('id')
+        if not uid: continue
+        user_investments = u.get('investments', [])
+        for inv in user_investments:
+            # Ensure consistency with new schema
+            inv['user_id'] = uid
+            inv.pop('_id', None)
+            await db.investments.update_one(
+                {"user_id": uid, "ticker": inv.get('ticker')},
+                {"$set": inv},
+                upsert=True
+            )
+        # Only unset after successful migration for this user
+        await db.users.update_one({"id": uid}, {"$unset": {"investments": ""}})
 
 # ==================== Auth Endpoints ====================
 @api_router.post("/auth/register")

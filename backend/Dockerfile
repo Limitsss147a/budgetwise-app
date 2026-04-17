@@ -13,4 +13,10 @@ COPY backend/ .
 ENV PORT 8080
 EXPOSE 8080
 
-CMD uvicorn server:app --host 0.0.0.0 --port ${PORT}
+CMD gunicorn server:app \
+    --worker-class uvicorn.workers.UvicornWorker \
+    --workers ${WEB_CONCURRENCY:-2} \
+    --bind 0.0.0.0:${PORT:-8080} \
+    --timeout 120 \
+    --keep-alive 5 \
+    --access-logfile -

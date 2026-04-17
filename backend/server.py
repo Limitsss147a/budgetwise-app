@@ -2,7 +2,7 @@ from dotenv import load_dotenv
 from pathlib import Path
 load_dotenv(Path(__file__).parent / '.env')
 
-from fastapi import FastAPI, APIRouter, Query, HTTPException, Depends, Request
+from fastapi import FastAPI, APIRouter, Query, HTTPException, Depends, Request, BackgroundTasks
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os, logging, uuid, csv, io, bcrypt, jwt
@@ -19,7 +19,14 @@ import requests
 from concurrent.futures import ThreadPoolExecutor
 
 mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
+client = AsyncIOMotorClient(
+    mongo_url,
+    maxPoolSize=int(os.environ.get("MONGO_MAX_POOL", "20")),
+    minPoolSize=2,
+    connectTimeoutMS=5000,
+    serverSelectionTimeoutMS=5000,
+    socketTimeoutMS=10000,
+)
 db = client[os.environ['DB_NAME']]
 JWT_SECRET = os.environ['JWT_SECRET']
 JWT_ALG = "HS256"
@@ -667,32 +674,32 @@ async def fetch_stock_price(ticker: str) -> Optional[dict]:
     return None
 
 
-@api_router.post("/portfolio/update-prices")
-async def update_market_prices(user: dict = Depends(get_current_user)):
-    uid = user["id"]
+async def _do_update_prices(uid: str):
+    """Background worker — jalankan setelah response dikirim."""
     investments = await db.investments.find({"user_id": uid}, {"_id": 0}).to_list(100)
     tickers = [inv["ticker"] for inv in investments]
+    if not tickers:
+        return
     results = await asyncio.gather(
         *[fetch_stock_price(t) for t in tickers],
         return_exceptions=True
     )
-    
-    updated = []
     for ticker, data in zip(tickers, results):
         if isinstance(data, Exception) or not data:
-            logger.warning(f"Skip {ticker}: {data}")
             continue
-        doc = {
-            "ticker": ticker,
-            "price": data.get("price", 0.0),
-            "pbv": data.get("pbv", 0.0),
-            "roe": data.get("roe", 0.0),
-            "der": data.get("der", 0.0),
-            "updated_at": datetime.now(timezone.utc).isoformat()
-        }
-        await db.market_prices.update_one({"ticker": ticker}, {"$set": doc}, upsert=True)
-        updated.append(doc)
-    return {"message": "Prices updated", "updated": updated}
+        await db.market_prices.update_one(
+            {"ticker": ticker},
+            {"$set": {**data, "updated_at": datetime.now(timezone.utc).isoformat()}},
+            upsert=True
+        )
+
+@api_router.post("/portfolio/update-prices")
+async def update_market_prices(
+    background_tasks: BackgroundTasks,
+    user: dict = Depends(get_current_user)
+):
+    background_tasks.add_task(_do_update_prices, user["id"])
+    return {"message": "Price update dimulai di background"}
 
 PRICE_STALE_SECONDS = 300  # 5 minutes
 
@@ -912,10 +919,22 @@ async def export_csv(month: Optional[str] = None, user: dict = Depends(get_curre
     out.seek(0)
     return StreamingResponse(iter([out.getvalue()]), media_type="text/csv", headers={"Content-Disposition": f"attachment; filename=laporan_{month or 'semua'}.csv"})
 
+MAX_EXPORT = int(os.environ.get("MAX_EXPORT_ROWS", "10000"))
+
 @api_router.get("/export/backup")
 async def backup(user: dict = Depends(get_current_user)):
     uid = user["id"]
-    return {"transactions": await db.transactions.find({"user_id": uid}, {"_id": 0}).to_list(100000), "categories": await db.categories.find({"$or": [{"is_default": True}, {"user_id": uid}]}, {"_id": 0}).to_list(100), "budgets": await db.budgets.find({"user_id": uid}, {"_id": 0}).to_list(100)}
+    tx_count = await db.transactions.count_documents({"user_id": uid})
+    if tx_count > MAX_EXPORT:
+        raise HTTPException(400,
+            f"Data terlalu besar untuk diexport sekaligus ({tx_count} transaksi). "
+            f"Gunakan export CSV per bulan."
+        )
+    return {
+        "transactions": await db.transactions.find({"user_id": uid}, {"_id": 0}).to_list(MAX_EXPORT),
+        "categories": await db.categories.find({"$or": [{"is_default": True}, {"user_id": uid}]}, {"_id": 0}).to_list(100),
+        "budgets": await db.budgets.find({"user_id": uid}, {"_id": 0}).to_list(100)
+    }
 
 @api_router.post("/import/backup")
 async def import_backup(data: BackupData, user: dict = Depends(get_current_user)):

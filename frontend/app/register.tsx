@@ -19,16 +19,23 @@ export default function RegisterScreen() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPw, setShowPw] = useState(false);
   const [nameFocus, setNameFocus] = useState(false);
   const [emailFocus, setEmailFocus] = useState(false);
   const [pwFocus, setPwFocus] = useState(false);
+  const [confirmFocus, setConfirmFocus] = useState(false);
+
+  const EMAIL_RE = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
 
   const handleRegister = async () => {
-    if (!name.trim() || !email.trim() || !password) { setError('Isi semua field'); return; }
-    if (password.length < 6) { setError('Password minimal 6 karakter'); return; }
+    if (!name.trim()) { setError('Nama wajib diisi'); return; }
+    if (!EMAIL_RE.test(email.trim())) { setError('Format email tidak valid'); return; }
+    if (password.length < 8) { setError('Password minimal 8 karakter'); return; }
+    if (!/[A-Za-z]/.test(password) || !/\d/.test(password)) { setError('Password harus mengandung huruf dan angka'); return; }
+    if (password !== confirmPassword) { setError('Konfirmasi password tidak cocok'); return; }
     setLoading(true); setError('');
     try { await register(name.trim(), email.trim(), password); }
     catch (e: any) { setError(e.message || 'Registrasi gagal'); }
@@ -120,7 +127,7 @@ export default function RegisterScreen() {
                   <TextInput
                     testID="register-password-input"
                     style={[s.input, { fontFamily: fonts.regular }]}
-                    placeholder="Minimal 6 karakter"
+                    placeholder="Minimal 8 karakter (huruf & angka)"
                     value={password}
                     onChangeText={setPassword}
                     secureTextEntry={!showPw}
@@ -133,9 +140,26 @@ export default function RegisterScreen() {
                   </TouchableOpacity>
                 </View>
 
+                {/* Confirm Password */}
+                <Text style={[s.label, { fontFamily: fonts.semiBold }]}>Konfirmasi Password</Text>
+                <View style={[s.inputRow, confirmFocus && s.inputFocused]}>
+                  <Ionicons name="lock-closed-outline" size={18} color={confirmFocus ? '#10B981' : 'rgba(255,255,255,0.4)'} />
+                  <TextInput
+                    testID="register-confirm-input"
+                    style={[s.input, { fontFamily: fonts.regular }]}
+                    placeholder="Ulangi password"
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    secureTextEntry={!showPw}
+                    placeholderTextColor="rgba(255,255,255,0.3)"
+                    onFocus={() => setConfirmFocus(true)}
+                    onBlur={() => setConfirmFocus(false)}
+                  />
+                </View>
+
                 {/* Password strength hint */}
                 <Text style={[s.hint, { fontFamily: fonts.regular }]}>
-                  Password minimal 6 karakter
+                  Minimal 8 karakter, kombinasi huruf dan angka
                 </Text>
 
                 {/* Submit */}

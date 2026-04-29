@@ -1,9 +1,19 @@
 // Fungsi utilitas format mata uang dan tanggal
 
+// Cache formatter karena Intl.NumberFormat cukup berat untuk di-instantiate tiap render.
+const rupiahFormatter = (() => {
+  try {
+    return new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 });
+  } catch {
+    return null;
+  }
+})();
+
 export function formatRupiah(amount: number): string {
-  const abs = Math.abs(Math.round(amount));
-  const formatted = abs.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-  return `Rp ${formatted}`;
+  const abs = Math.abs(Math.round(Number.isFinite(amount) ? amount : 0));
+  if (rupiahFormatter) return `Rp ${rupiahFormatter.format(abs)}`;
+  // Fallback jika Intl tidak tersedia di runtime.
+  return `Rp ${abs.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`;
 }
 
 export function formatDate(dateStr: string): string {

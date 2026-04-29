@@ -7,38 +7,57 @@ import type {
 const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
 let authToken: string | null = null;
+let refreshTokenValue: string | null = null;
+
 export function setAuthToken(token: string | null) { authToken = token; }
+export function setRefreshToken(token: string | null) { refreshTokenValue = token; }
 
-let isRefreshing = false;
-let refreshToken: string | null = null;
-export function setRefreshToken(token: string | null) { refreshToken = token; }
+// Hindari race: ketika ada beberapa request paralel yang 401 di waktu bersamaan,
+// hanya satu yang benar-benar memanggil /auth/refresh, yang lain menunggu hasilnya.
+let refreshPromise: Promise<string | null> | null = null;
 
-async function request(path: string, options: RequestInit = {}) {
-  const url = `${BASE_URL}${path}`;
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
-  if (options.headers) Object.assign(headers, options.headers);
-  const response = await fetch(url, { ...options, headers });
-
-  if (response.status === 401 && !path.includes('/auth/') && refreshToken && !isRefreshing) {
-    isRefreshing = true;
+async function doRefresh(): Promise<string | null> {
+  if (!refreshTokenValue) return null;
+  if (refreshPromise) return refreshPromise;
+  refreshPromise = (async () => {
     try {
       const res = await fetch(`${BASE_URL}/api/auth/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refresh_token: refreshToken }),
+        body: JSON.stringify({ refresh_token: refreshTokenValue }),
       });
-      if (res.ok) {
-        const data = await res.json();
-        setAuthToken(data.access_token);
-        await SafeStorage.setItem('access_token', data.access_token);
-        // Retry original request dengan token baru
-        headers['Authorization'] = `Bearer ${data.access_token}`;
-        isRefreshing = false;
-        return fetch(url, { ...options, headers }).then(r => r.json());
-      }
-    } catch {}
-    isRefreshing = false;
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (!data?.access_token) return null;
+      setAuthToken(data.access_token);
+      await SafeStorage.setItem('access_token', data.access_token);
+      return data.access_token as string;
+    } catch {
+      return null;
+    } finally {
+      // reset setelah pekerjaan selesai agar retry berikutnya tetap bisa refresh
+      setTimeout(() => { refreshPromise = null; }, 0);
+    }
+  })();
+  return refreshPromise;
+}
+
+async function request(path: string, options: RequestInit = {}) {
+  const url = `${BASE_URL}${path}`;
+  const buildHeaders = (): Record<string, string> => {
+    const h: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (authToken) h['Authorization'] = `Bearer ${authToken}`;
+    if (options.headers) Object.assign(h, options.headers as Record<string, string>);
+    return h;
+  };
+
+  let response = await fetch(url, { ...options, headers: buildHeaders() });
+
+  if (response.status === 401 && !path.includes('/auth/') && refreshTokenValue) {
+    const newToken = await doRefresh();
+    if (newToken) {
+      response = await fetch(url, { ...options, headers: buildHeaders() });
+    }
   }
 
   if (!response.ok) {

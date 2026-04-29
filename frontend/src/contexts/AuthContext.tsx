@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import SafeStorage from '../utils/storage';
-import { setAuthToken } from '../utils/api';
+import { setAuthToken, setRefreshToken } from '../utils/api';
 
 interface User { id: string; email: string; name: string; role: string; }
 
@@ -31,9 +31,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const restoreSession = async () => {
     try {
-      const stored = await SafeStorage.getItem('access_token');
+      const [stored, storedRefresh] = await Promise.all([
+        SafeStorage.getItem('access_token'),
+        SafeStorage.getItem('refresh_token'),
+      ]);
       if (stored) {
         setAuthToken(stored);
+        setRefreshToken(storedRefresh);
         const res = await fetch(`${BASE_URL}/api/auth/me`, { headers: { Authorization: `Bearer ${stored}` } });
         if (res.ok) {
           const data = await res.json();
@@ -41,6 +45,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else {
           await SafeStorage.multiRemove(['access_token', 'refresh_token']);
           setAuthToken(null);
+          setRefreshToken(null);
         }
       }
     } catch (e) { console.error('restore session error', e); }
@@ -60,6 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await SafeStorage.setItem('access_token', data.access_token);
     await SafeStorage.setItem('refresh_token', data.refresh_token);
     setAuthToken(data.access_token);
+    setRefreshToken(data.refresh_token);
     setUser(data.user); setToken(data.access_token);
   };
 
@@ -76,6 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await SafeStorage.setItem('access_token', data.access_token);
     await SafeStorage.setItem('refresh_token', data.refresh_token);
     setAuthToken(data.access_token);
+    setRefreshToken(data.refresh_token);
     setUser(data.user); setToken(data.access_token);
   };
 
@@ -83,6 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setToken(null);
     setAuthToken(null);
+    setRefreshToken(null);
     try {
       await SafeStorage.multiRemove(['access_token', 'refresh_token']);
     } catch (e) {

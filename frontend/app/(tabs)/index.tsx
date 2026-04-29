@@ -28,10 +28,12 @@ export default function Dashboard() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const month = getCurrentMonth();
 
   const loadData = useCallback(async () => {
     try {
+      setLoadError(null);
       const [s, b, t, tx, c] = await Promise.all([
         api.getSummary(month), api.getCategoryBreakdown(month),
         api.getDailyTrend(7), api.getTransactions({ page: '1', limit: '5', sort_by: 'date', sort_order: 'desc' }),
@@ -39,7 +41,10 @@ export default function Dashboard() {
       ]);
       setSummary(s); setBreakdown(b.breakdown); setDailyTrend(t);
       setRecentTx(tx.transactions); setCategories(c);
-    } catch (e) { console.error(e); }
+    } catch (e: any) {
+      console.error('[Dashboard] load error', e);
+      setLoadError(e?.message || 'Gagal memuat data');
+    }
     finally { setLoading(false); setRefreshing(false); }
   }, [month]);
 
@@ -48,6 +53,26 @@ export default function Dashboard() {
   const catMap = useCallback((id: string) => categories.find(c => c.id === id), [categories]);
 
   if (loading) return <LoadingScreen />;
+
+  if (loadError && !summary) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.bg, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+        <Ionicons name="cloud-offline-outline" size={48} color={colors.textTertiary} />
+        <Text style={{ color: colors.text, fontFamily: fonts.semiBold, fontSize: 16, marginTop: 12, textAlign: 'center' }}>
+          Gagal memuat data
+        </Text>
+        <Text style={{ color: colors.textTertiary, fontFamily: fonts.regular, fontSize: 13, marginTop: 4, marginBottom: 16, textAlign: 'center' }}>
+          {loadError}
+        </Text>
+        <TouchableOpacity
+          onPress={() => { setLoading(true); loadData(); }}
+          style={{ paddingHorizontal: 20, paddingVertical: 10, borderRadius: 12, backgroundColor: colors.brand }}
+        >
+          <Text style={{ color: '#FFF', fontFamily: fonts.semiBold }}>Coba Lagi</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   const pieData = breakdown.map(item => ({ value: item.total, color: item.category_color }));
   const barData = dailyTrend.map(day => ({

@@ -3,6 +3,8 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, TextInput,
 import Toast from 'react-native-toast-message';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as LocalAuthentication from 'expo-local-authentication';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -90,8 +92,26 @@ export default function SettingsScreen() {
   const handleBackup = async () => {
     try {
       const data = await api.getBackup();
-      Alert.alert('Backup Berhasil', `${data.transactions.length} transaksi, ${data.categories.length} kategori, ${data.budgets.length} anggaran`);
-    } catch { Toast.show({ type: 'error', text1: 'Gagal backup data' }); }
+      const summary = `${data.transactions.length} transaksi, ${data.categories.length} kategori, ${data.budgets.length} anggaran`;
+      if (Platform.OS === 'web') {
+        Alert.alert('Backup Berhasil', summary);
+        return;
+      }
+      const ts = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
+      const fileUri = `${FileSystem.cacheDirectory}budgetwise-backup-${ts}.json`;
+      await FileSystem.writeAsStringAsync(fileUri, JSON.stringify(data, null, 2), {
+        encoding: FileSystem.EncodingType.UTF8,
+      });
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(fileUri, { mimeType: 'application/json', dialogTitle: 'Simpan Backup BudgetWise' });
+      } else {
+        Alert.alert('Backup Tersimpan', `${summary}\nFile: ${fileUri}`);
+      }
+    } catch (e: any) {
+      console.error('[Settings] backup error', e);
+      Toast.show({ type: 'error', text1: 'Gagal backup data', text2: e?.message });
+    }
   };
 
   const handleReset = () => {

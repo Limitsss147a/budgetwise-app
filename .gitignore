@@ -87,3 +87,9 @@ android-sdk/-e
 # Environment files
 *.env
 *.env.*
+
+# Dev scratch / utility scripts
+tmp/
+results.txt
+backend/check_db.py
+backend/.venv/

@@ -15,7 +15,7 @@ export interface Transaction {
   category_id: string;
   description: string;
   date: string;
-  photo_uri: string;
+  photo_uri?: string;
   created_at: string;
   updated_at: string;
 }

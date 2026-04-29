@@ -1,22 +1,13 @@
-import React, { useState, useEffect } from "react";
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  ScrollView, 
-  TouchableOpacity, 
-  Dimensions,
-  Platform
+import React, { useState } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
 } from "react-native";
 import { BlurView } from 'expo-blur';
-import Animated, { 
-  FadeInDown, 
-  useAnimatedStyle, 
-  withSpring,
-  useSharedValue,
-  withDelay,
-} from "react-native-reanimated";
-import Svg, { Polyline } from "react-native-svg";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import { fonts } from "../../constants/fonts";
 import { formatRupiah } from "../../utils/format";
 
@@ -73,18 +64,6 @@ export const StockPortfolioTable = ({
     volume: 50,    // Lot
     price: 110,
     change: 130,   // Daily Performance
-  };
-
-  // Mock chart data generation (for visual consistentcy with template)
-  const getMockChart = (price: number) => {
-    const data = [];
-    let current = price * 0.95;
-    for(let i=0; i<10; i++) {
-       current += (Math.random() - 0.45) * (price * 0.02);
-       data.push(current);
-    }
-    data.push(price);
-    return data;
   };
 
   return (

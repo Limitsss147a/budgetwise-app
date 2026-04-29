@@ -2,13 +2,14 @@ from dotenv import load_dotenv
 from pathlib import Path
 load_dotenv(Path(__file__).parent / '.env')
 
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, APIRouter, Query, HTTPException, Depends, Request, BackgroundTasks
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os, logging, uuid, csv, io, bcrypt, jwt
 from datetime import datetime, timezone, timedelta
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional
 from fastapi.responses import StreamingResponse
 import asyncio
 import httpx
@@ -16,9 +17,27 @@ import random
 import re
 import yfinance as yf
 import requests
-from concurrent.futures import ThreadPoolExecutor
 
-mongo_url = os.environ['MONGO_URL']
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# ==================== Env Validation ====================
+def _require_env(name: str, min_length: int = 0) -> str:
+    val = os.environ.get(name, "")
+    if not val:
+        raise RuntimeError(f"Env var {name} is required but not set")
+    if min_length and len(val) < min_length:
+        raise RuntimeError(f"Env var {name} must be at least {min_length} characters (got {len(val)})")
+    return val
+
+mongo_url = _require_env("MONGO_URL")
+DB_NAME = _require_env("DB_NAME")
+JWT_SECRET = _require_env("JWT_SECRET", min_length=32)
+JWT_ALG = "HS256"
+
+EMAIL_REGEX = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$")
+PUSH_TOKEN_REGEX = re.compile(r"^(ExponentPushToken\[[A-Za-z0-9_\-]+\]|ExpoPushToken\[[A-Za-z0-9_\-]+\])$")
+
 client = AsyncIOMotorClient(
     mongo_url,
     maxPoolSize=int(os.environ.get("MONGO_MAX_POOL", "20")),
@@ -27,9 +46,7 @@ client = AsyncIOMotorClient(
     serverSelectionTimeoutMS=5000,
     socketTimeoutMS=10000,
 )
-db = client[os.environ['DB_NAME']]
-JWT_SECRET = os.environ['JWT_SECRET']
-JWT_ALG = "HS256"
+db = client[DB_NAME]
 
 def month_range_query(month: str) -> dict:
     """Konversi '2025-01' menjadi range query yang bisa menggunakan index."""
@@ -41,18 +58,12 @@ def month_range_query(month: str) -> dict:
     end = f"{next_y}-{str(next_m).zfill(2)}-01"
     return {"$gte": start, "$lt": end}
 
-app = FastAPI()
-api_router = APIRouter(prefix="/api")
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 limiter = Limiter(key_func=get_remote_address)
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+api_router = APIRouter(prefix="/api")
 
 # ==================== Auth Helpers ====================
 def hash_password(pw: str) -> str:
@@ -169,9 +180,8 @@ DEFAULT_CATEGORIES = [
     {"name": "Lainnya", "type": "income", "icon": "ellipsis-horizontal", "color": "#C2A878"},
 ]
 
-# ==================== Startup ====================
-@app.on_event("startup")
-async def startup():
+# ==================== Startup / Lifespan ====================
+async def _init_app_state():
     await db.users.create_index("email", unique=True)
     
     # Index paling penting — query utama semua analytics
@@ -264,18 +274,43 @@ async def startup():
         # Only unset after successful migration for this user
         await db.users.update_one({"id": uid}, {"$unset": {"investments": ""}})
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    try:
+        await _init_app_state()
+    except Exception as e:
+        logger.exception("App init failed: %s", e)
+    yield
+    try:
+        client.close()
+    except Exception:
+        pass
+
+
+app = FastAPI(lifespan=lifespan)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 # ==================== Auth Endpoints ====================
 @api_router.post("/auth/register")
 @limiter.limit("5/minute")
 async def register(request: Request, data: AuthRegister):
     email = data.email.lower().strip()
+    name = data.name.strip()
+    if not EMAIL_REGEX.match(email):
+        raise HTTPException(400, "Format email tidak valid")
+    if not name or len(name) > 80:
+        raise HTTPException(400, "Nama wajib diisi (maks 80 karakter)")
+    if len(data.password) < 8:
+        raise HTTPException(400, "Password minimal 8 karakter")
+    if not re.search(r"[A-Za-z]", data.password) or not re.search(r"\d", data.password):
+        raise HTTPException(400, "Password harus mengandung huruf dan angka")
     if await db.users.find_one({"email": email}):
         raise HTTPException(400, "Email sudah terdaftar")
-    if len(data.password) < 6:
-        raise HTTPException(400, "Password minimal 6 karakter")
     user_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
-    await db.users.insert_one({"id": user_id, "email": email, "password_hash": hash_password(data.password), "name": data.name.strip(), "role": "user", "created_at": now})
+    await db.users.insert_one({"id": user_id, "email": email, "password_hash": hash_password(data.password), "name": name, "role": "user", "created_at": now})
     await db.settings.insert_one({"user_id": user_id, "currency": "IDR", "theme": "light", "pin_hash": ""})
     return {"user": {"id": user_id, "email": email, "name": data.name.strip(), "role": "user"}, "access_token": create_access_token(user_id, email), "refresh_token": create_refresh_token(user_id)}
 
@@ -468,17 +503,46 @@ async def get_daily_trend(days: int = Query(7, ge=1, le=30), user: dict = Depend
 @api_router.get("/analytics/monthly-trend")
 async def get_monthly_trend(months: int = Query(6, ge=1, le=12), user: dict = Depends(get_current_user)):
     now = datetime.now(timezone.utc)
+    # Hitung bulan earliest (inklusif) dan latest+1 (eksklusif) untuk range query.
+    start_y, start_m = now.year, now.month - (months - 1)
+    while start_m <= 0:
+        start_m += 12
+        start_y -= 1
+    start_str = f"{start_y}-{str(start_m).zfill(2)}-01"
+    end_m = now.month + 1
+    end_y = now.year
+    if end_m > 12:
+        end_m -= 12
+        end_y += 1
+    end_str = f"{end_y}-{str(end_m).zfill(2)}-01"
+
+    pipe = [
+        {"$match": {"user_id": user["id"], "date": {"$gte": start_str, "$lt": end_str}}},
+        {"$group": {"_id": {"month": {"$substr": ["$date", 0, 7]}, "type": "$type"}, "total": {"$sum": "$amount"}}},
+    ]
+    agg = await db.transactions.aggregate(pipe).to_list(1000)
+
+    # Pre-fill seluruh bulan dalam range supaya output selalu konsisten.
+    trend_map: dict = {}
+    y, m = start_y, start_m
+    for _ in range(months):
+        key = f"{y}-{str(m).zfill(2)}"
+        trend_map[key] = {"month": key, "income": 0, "expense": 0, "net": 0}
+        m += 1
+        if m > 12:
+            m = 1
+            y += 1
+
+    for row in agg:
+        key = row["_id"]["month"]
+        t = row["_id"]["type"]
+        if key in trend_map and t in ("income", "expense"):
+            trend_map[key][t] = row["total"]
+
     trend = []
-    for i in range(months-1, -1, -1):
-        m = now.month - i
-        y = now.year
-        while m <= 0: m += 12; y -= 1
-        ms = f"{y}-{str(m).zfill(2)}"
-        pipe = [{"$match": {"user_id": user["id"], "date": month_range_query(ms)}}, {"$group": {"_id": "$type", "total": {"$sum": "$amount"}}}]
-        res = await db.transactions.aggregate(pipe).to_list(10)
-        inc = sum(r["total"] for r in res if r["_id"] == "income")
-        exp = sum(r["total"] for r in res if r["_id"] == "expense")
-        trend.append({"month": ms, "income": inc, "expense": exp, "net": inc - exp})
+    for v in trend_map.values():
+        v["net"] = v["income"] - v["expense"]
+        trend.append(v)
     return trend
 
 @api_router.get("/analytics/stats")
@@ -551,7 +615,10 @@ async def update_settings(data: SettingsUpdate, user: dict = Depends(get_current
 
 @api_router.post("/notifications/register")
 async def register_push_token(data: PushTokenRequest, user: dict = Depends(get_current_user)):
-    await db.settings.update_one({"user_id": user["id"]}, {"$set": {"push_token": data.token}}, upsert=True)
+    token = (data.token or "").strip()
+    if not token or not PUSH_TOKEN_REGEX.match(token):
+        raise HTTPException(400, "Token push tidak valid")
+    await db.settings.update_one({"user_id": user["id"]}, {"$set": {"push_token": token}}, upsert=True)
     return {"message": "Token registered"}
 
 @api_router.post("/settings/pin/set")
@@ -952,17 +1019,59 @@ async def backup(user: dict = Depends(get_current_user)):
         "budgets": await db.budgets.find({"user_id": uid}, {"_id": 0}).to_list(100)
     }
 
+TRANSACTION_FIELDS = {"id", "type", "amount", "category_id", "description", "date", "photo_uri", "created_at", "updated_at"}
+BUDGET_FIELDS = {"id", "category_id", "amount", "month", "created_at", "updated_at"}
+
+
+def _sanitize_tx(raw: dict, uid: str) -> Optional[dict]:
+    if not isinstance(raw, dict):
+        return None
+    out = {k: v for k, v in raw.items() if k in TRANSACTION_FIELDS}
+    if out.get("type") not in ("income", "expense"):
+        return None
+    try:
+        out["amount"] = float(out.get("amount", 0))
+    except (TypeError, ValueError):
+        return None
+    if out["amount"] < 0 or out["amount"] > 1e15:
+        return None
+    if not isinstance(out.get("date"), str) or not out.get("category_id"):
+        return None
+    out["id"] = out.get("id") or str(uuid.uuid4())
+    out["user_id"] = uid
+    return out
+
+
+def _sanitize_budget(raw: dict, uid: str) -> Optional[dict]:
+    if not isinstance(raw, dict):
+        return None
+    out = {k: v for k, v in raw.items() if k in BUDGET_FIELDS}
+    try:
+        out["amount"] = float(out.get("amount", 0))
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(out.get("month"), str) or not out.get("category_id"):
+        return None
+    out["id"] = out.get("id") or str(uuid.uuid4())
+    out["user_id"] = uid
+    return out
+
+
 @api_router.post("/import/backup")
 async def import_backup(data: BackupData, user: dict = Depends(get_current_user)):
     uid = user["id"]
+    if len(data.transactions) > MAX_EXPORT or len(data.budgets) > 1000:
+        raise HTTPException(400, "Data terlalu besar untuk diimpor")
     if data.transactions:
-        await db.transactions.delete_many({"user_id": uid})
-        for t in data.transactions: t["user_id"] = uid; t.pop("_id", None)
-        await db.transactions.insert_many(data.transactions)
+        clean_tx = [t for t in (_sanitize_tx(x, uid) for x in data.transactions) if t]
+        if clean_tx:
+            await db.transactions.delete_many({"user_id": uid})
+            await db.transactions.insert_many(clean_tx)
     if data.budgets:
-        await db.budgets.delete_many({"user_id": uid})
-        for b in data.budgets: b["user_id"] = uid; b.pop("_id", None)
-        await db.budgets.insert_many(data.budgets)
+        clean_bg = [b for b in (_sanitize_budget(x, uid) for x in data.budgets) if b]
+        if clean_bg:
+            await db.budgets.delete_many({"user_id": uid})
+            await db.budgets.insert_many(clean_bg)
     return {"message": "Data diimpor"}
 
 @api_router.delete("/data/reset")
@@ -976,19 +1085,17 @@ async def reset_data(user: dict = Depends(get_current_user)):
 
 app.include_router(api_router)
 
-ALLOWED_ORIGINS = os.environ.get("ALLOWED_ORIGINS", "").split(",")
-# Untuk mobile app + dev, tambahkan origins berikut sebagai default fallback:
-DEFAULT_ORIGINS = ["exp://", "http://localhost:8081", "http://localhost:19006"]
-origins = [o.strip() for o in ALLOWED_ORIGINS if o.strip()] or DEFAULT_ORIGINS
+# CORS — mobile app (no Origin header) selalu diperbolehkan, tapi origin HTTP/HTTPS
+# eksplisit dikontrol via env ALLOWED_ORIGINS. Entry yang tidak valid (mis. "exp://"
+# skema tanpa host) tidak lagi diperbolehkan sebagai fallback — lebih aman.
+DEFAULT_DEV_ORIGINS = ["http://localhost:8081", "http://localhost:19006", "http://localhost:19000"]
+_env_origins = [o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "").split(",") if o.strip()]
+origins = _env_origins or DEFAULT_DEV_ORIGINS
 
 app.add_middleware(
-    CORSMiddleware, 
-    allow_credentials=True, 
-    allow_origins=origins, 
-    allow_methods=["GET", "POST", "PUT", "DELETE"], 
-    allow_headers=["Authorization", "Content-Type"]
+    CORSMiddleware,
+    allow_credentials=True,
+    allow_origins=origins,
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_headers=["Authorization", "Content-Type"],
 )
-
-@app.on_event("shutdown")
-async def shutdown():
-    client.close()

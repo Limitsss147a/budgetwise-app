@@ -994,12 +994,34 @@ async def get_net_worth(user: dict = Depends(get_current_user)):
     total_cost_all = sum(inv["average_buy_price"] * (inv["lot_count"] * 100) for inv in investments)
     total_asset_value = liquid_asset + total_investment_value
 
+    total_pl_pct = (total_unrealized_pl / total_cost_all * 100) if total_cost_all > 0 else 0
+
+    # --- Auto-snapshot: record at most once per day ---
+    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    existing_snap = await db.net_worth_snapshots.find_one({"user_id": uid, "date": today_str})
+    snap_doc = {
+        "user_id": uid,
+        "date": today_str,
+        "total_asset_value": liquid_asset + total_investment_value,
+        "liquid_asset": liquid_asset,
+        "total_investment_value": total_investment_value,
+        "total_unrealized_pl": total_unrealized_pl,
+        "total_unrealized_pl_percentage": total_pl_pct,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    if existing_snap:
+        await db.net_worth_snapshots.update_one(
+            {"user_id": uid, "date": today_str}, {"$set": snap_doc}
+        )
+    else:
+        await db.net_worth_snapshots.insert_one(snap_doc)
+
     return {
         "liquid_asset": liquid_asset,
         "total_investment_value": total_investment_value,
-        "total_asset_value": total_asset_value,
+        "total_asset_value": liquid_asset + total_investment_value,
         "total_unrealized_pl": total_unrealized_pl,
-        "total_unrealized_pl_percentage": (total_unrealized_pl / total_cost_all * 100) if total_cost_all > 0 else 0,
+        "total_unrealized_pl_percentage": total_pl_pct,
         "holdings": holdings
     }
 
@@ -1083,6 +1105,77 @@ async def delete_investment(ticker: str, user: dict = Depends(get_current_user))
     target_ticker = ticker.upper().strip()
     await db.investments.delete_one({"user_id": uid, "ticker": target_ticker})
     return {"message": "Investment removed"}
+
+
+# ==================== Net Worth History ====================
+
+
+PERIOD_DAYS = {"1W": 7, "1M": 30, "3M": 90, "6M": 180, "1Y": 365}
+
+
+@api_router.get("/portfolio/net-worth/history")
+async def get_net_worth_history(
+    period: str = Query("1M", regex="^(1W|1M|3M|6M|1Y|ALL)$"),
+    user: dict = Depends(get_current_user),
+):
+    uid = user["id"]
+    q: dict = {"user_id": uid}
+    if period != "ALL":
+        days = PERIOD_DAYS[period]
+        start = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
+        q["date"] = {"$gte": start}
+    snapshots = (
+        await db.net_worth_snapshots.find(q, {"_id": 0, "user_id": 0})
+        .sort("date", 1)
+        .to_list(1000)
+    )
+    return {"period": period, "snapshots": snapshots}
+
+
+@api_router.post("/portfolio/net-worth/snapshot")
+async def record_net_worth_snapshot(user: dict = Depends(get_current_user)):
+    """Manually trigger a net worth snapshot for today."""
+    uid = user["id"]
+    # Calculate current net worth
+    pipe = [{"$match": {"user_id": uid}}, {"$group": {"_id": "$type", "total": {"$sum": "$amount"}}}]
+    res = await db.transactions.aggregate(pipe).to_list(10)
+    inc = sum(r["total"] for r in res if r["_id"] == "income")
+    exp = sum(r["total"] for r in res if r["_id"] == "expense")
+    liquid = inc - exp
+
+    investments = await db.investments.find({"user_id": uid}, {"_id": 0}).to_list(100)
+    tickers = [inv["ticker"] for inv in investments]
+    prices_list = await db.market_prices.find({"ticker": {"$in": tickers}}, {"_id": 0}).to_list(len(tickers)) if tickers else []
+    price_map = {p["ticker"]: p for p in prices_list}
+
+    total_inv = 0
+    total_pl = 0
+    total_cost_all = 0
+    for inv in investments:
+        mp = price_map.get(inv["ticker"], {})
+        cp = mp.get("price", 0) or inv["average_buy_price"]
+        shares = inv["lot_count"] * 100
+        total_inv += cp * shares
+        total_cost_all += inv["average_buy_price"] * shares
+        total_pl += (cp - inv["average_buy_price"]) * shares
+
+    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    total_pl_pct = (total_pl / total_cost_all * 100) if total_cost_all > 0 else 0
+    snap = {
+        "user_id": uid,
+        "date": today_str,
+        "total_asset_value": liquid + total_inv,
+        "liquid_asset": liquid,
+        "total_investment_value": total_inv,
+        "total_unrealized_pl": total_pl,
+        "total_unrealized_pl_percentage": total_pl_pct,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.net_worth_snapshots.update_one(
+        {"user_id": uid, "date": today_str}, {"$set": snap}, upsert=True
+    )
+    return {"message": "Snapshot recorded", "snapshot": {k: v for k, v in snap.items() if k != "_id"}}
+
 
 # ==================== Export ====================
 

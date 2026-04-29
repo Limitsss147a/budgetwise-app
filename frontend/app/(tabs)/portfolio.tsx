@@ -14,6 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { LoadingScreen } from '../../src/components/ui/LoadingScreen';
 import { AnimatedNumber } from '../../src/components/ui/AnimatedNumber';
+import { NetWorthChart } from '../../src/components/ui/NetWorthChart';
 
 const AUTO_REFRESH_INTERVAL = 60_000; // 60 seconds
 
@@ -265,6 +266,11 @@ export default function PortfolioScreen() {
                 </LinearGradient>
               </BlurView>
             </View>
+          </View>
+
+          {/* Net Worth History Chart */}
+          <View style={{ paddingHorizontal: 20 }}>
+            <NetWorthChart colors={colors} theme={theme} />
           </View>
 
           {(!data?.holdings || data.holdings.length === 0) ? (

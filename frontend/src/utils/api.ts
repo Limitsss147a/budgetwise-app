@@ -112,6 +112,8 @@ export const api = {
 
   updateMarketPrices: (): Promise<{message: string, updated: any[]}> => request('/api/portfolio/update-prices', { method: 'POST' }),
   getNetWorth: (): Promise<{liquid_asset: number, total_investment_value: number, total_asset_value: number, total_unrealized_pl: number, total_unrealized_pl_percentage: number, holdings: any[]}> => request('/api/portfolio/net-worth'),
+  getNetWorthHistory: (period?: string): Promise<{period: string, snapshots: any[]}> => request(`/api/portfolio/net-worth/history${period ? `?period=${period}` : ''}`),
+  recordNetWorthSnapshot: (): Promise<{message: string, snapshot: any}> => request('/api/portfolio/net-worth/snapshot', { method: 'POST' }),
   addInvestment: (data: { ticker: string, lot_count: number, average_buy_price: number }): Promise<{message: string, investments: any[]}> => request('/api/portfolio/investments', { method: 'POST', body: JSON.stringify(data) }),
   updateInvestment: (ticker: string, data: { lot_count?: number, average_buy_price?: number }): Promise<{message: string, investments: any[]}> => request(`/api/portfolio/investments/${encodeURIComponent(ticker)}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteInvestment: (ticker: string): Promise<{message: string}> => request(`/api/portfolio/investments/${encodeURIComponent(ticker)}`, { method: 'DELETE' }),

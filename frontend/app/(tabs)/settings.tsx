@@ -5,6 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
+import * as DocumentPicker from 'expo-document-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -33,6 +34,10 @@ export default function SettingsScreen() {
   const [pinError, setPinError] = useState('');
   const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [hasBiometricHardware, setHasBiometricHardware] = useState(false);
+  const [backingUp, setBackingUp] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  const [restoreData, setRestoreData] = useState<any>(null);
+  const [showRestoreConfirm, setShowRestoreConfirm] = useState(false);
 
   const loadSettings = useCallback(async () => {
     try {
@@ -90,27 +95,98 @@ export default function SettingsScreen() {
   };
 
   const handleBackup = async () => {
+    if (backingUp) return;
+    setBackingUp(true);
     try {
       const data = await api.getBackup();
       const summary = `${data.transactions.length} transaksi, ${data.categories.length} kategori, ${data.budgets.length} anggaran`;
       if (Platform.OS === 'web') {
-        Alert.alert('Backup Berhasil', summary);
+        // Web: download as blob
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const ts = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
+        a.href = url;
+        a.download = `budgetwise-backup-${ts}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        Toast.show({ type: 'success', text1: 'Backup berhasil diunduh', text2: summary });
         return;
       }
       const ts = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
-      const fileUri = `${FileSystem.cacheDirectory}budgetwise-backup-${ts}.json`;
+      const fileName = `budgetwise-backup-${ts}.json`;
+      const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
       await FileSystem.writeAsStringAsync(fileUri, JSON.stringify(data, null, 2), {
         encoding: FileSystem.EncodingType.UTF8,
       });
       const canShare = await Sharing.isAvailableAsync();
       if (canShare) {
         await Sharing.shareAsync(fileUri, { mimeType: 'application/json', dialogTitle: 'Simpan Backup BudgetWise' });
+        Toast.show({ type: 'success', text1: 'Backup selesai', text2: `${summary}. Pilih lokasi penyimpanan dari dialog share.` });
       } else {
-        Alert.alert('Backup Tersimpan', `${summary}\nFile: ${fileUri}`);
+        Alert.alert(
+          'Backup Berhasil',
+          `${summary}\n\nFile tersimpan di:\n${fileUri}\n\nGunakan file manager untuk memindahkan file ini ke lokasi yang aman.`
+        );
       }
     } catch (e: any) {
       console.error('[Settings] backup error', e);
       Toast.show({ type: 'error', text1: 'Gagal backup data', text2: e?.message });
+    } finally {
+      setBackingUp(false);
+    }
+  };
+
+  const handlePickRestoreFile = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: 'application/json',
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) return;
+
+      const asset = result.assets[0];
+      const content = await FileSystem.readAsStringAsync(asset.uri, {
+        encoding: FileSystem.EncodingType.UTF8,
+      });
+
+      let parsed: any;
+      try {
+        parsed = JSON.parse(content);
+      } catch {
+        Toast.show({ type: 'error', text1: 'File tidak valid', text2: 'File bukan format backup BudgetWise yang benar' });
+        return;
+      }
+
+      // Validate structure
+      if (!parsed.transactions && !parsed.categories && !parsed.budgets) {
+        Toast.show({ type: 'error', text1: 'Format tidak dikenali', text2: 'File tidak mengandung data transaksi, kategori, atau anggaran' });
+        return;
+      }
+
+      setRestoreData(parsed);
+      setShowRestoreConfirm(true);
+    } catch (e: any) {
+      console.error('[Settings] pick restore file error', e);
+      Toast.show({ type: 'error', text1: 'Gagal membaca file', text2: e?.message });
+    }
+  };
+
+  const confirmRestore = async () => {
+    if (!restoreData || restoring) return;
+    setRestoring(true);
+    try {
+      await api.importBackup(restoreData);
+      Toast.show({ type: 'success', text1: 'Data berhasil dipulihkan', text2: 'Semua data dari file backup telah diimpor' });
+      setShowRestoreConfirm(false);
+      setRestoreData(null);
+      loadSettings();
+    } catch (e: any) {
+      console.error('[Settings] restore error', e);
+      Toast.show({ type: 'error', text1: 'Gagal memulihkan data', text2: e?.message });
+    } finally {
+      setRestoring(false);
     }
   };
 
@@ -406,9 +482,19 @@ export default function SettingsScreen() {
         <View style={st.section}>
           <Text style={[st.sectionTitle, { color: colors.textTertiary, fontFamily: fonts.semiBold }]}>Data</Text>
           <View style={[st.card, { backgroundColor: colors.bgCard, borderColor: colors.border }]}>
-            <TouchableOpacity testID="backup-btn" style={st.settingRow} onPress={handleBackup}>
+            <TouchableOpacity testID="backup-btn" style={st.settingRow} onPress={handleBackup} disabled={backingUp}>
               <Ionicons name="cloud-download-outline" size={20} color={colors.brand} />
               <Text style={[st.settingLabel, { color: colors.text, fontFamily: fonts.medium }]}>Backup Data</Text>
+              {backingUp ? (
+                <ActivityIndicator size="small" color={colors.brand} />
+              ) : (
+                <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
+              )}
+            </TouchableOpacity>
+            <View style={[st.divider, { backgroundColor: colors.border }]} />
+            <TouchableOpacity testID="restore-btn" style={st.settingRow} onPress={handlePickRestoreFile}>
+              <Ionicons name="cloud-upload-outline" size={20} color={colors.brand} />
+              <Text style={[st.settingLabel, { color: colors.text, fontFamily: fonts.medium }]}>Restore Backup</Text>
               <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
             </TouchableOpacity>
             <View style={[st.divider, { backgroundColor: colors.border }]} />
@@ -466,6 +552,74 @@ export default function SettingsScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Restore Confirmation Modal */}
+      <Modal visible={showRestoreConfirm} transparent animationType="fade" onRequestClose={() => !restoring && setShowRestoreConfirm(false)}>
+        <View style={st.modalOverlay}>
+          <Pressable style={st.modalBackdrop} onPress={() => !restoring && setShowRestoreConfirm(false)} />
+          <View style={[st.confirmDialog, { backgroundColor: colors.bgCard, borderColor: colors.border }]}>
+            <View style={{ alignItems: 'center', marginBottom: 16 }}>
+              <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: 'rgba(232,106,51,0.12)', justifyContent: 'center', alignItems: 'center', marginBottom: 12 }}>
+                <Ionicons name="cloud-upload-outline" size={26} color={colors.accent} />
+              </View>
+              <Text style={[st.confirmTitle, { color: colors.text, fontFamily: fonts.bold }]}>Restore Backup</Text>
+              <Text style={{ color: colors.textSecondary, fontFamily: fonts.regular, fontSize: 14, textAlign: 'center', marginTop: 8 }}>
+                Data saat ini akan diganti dengan data dari file backup.
+              </Text>
+            </View>
+
+            {restoreData && (
+              <View style={[st.restoreSummary, { backgroundColor: colors.bgSecondary, borderColor: colors.border }]}>
+                <View style={st.restoreSummaryRow}>
+                  <Ionicons name="swap-horizontal-outline" size={16} color={colors.brand} />
+                  <Text style={{ color: colors.text, fontFamily: fonts.medium, fontSize: 13, flex: 1 }}>
+                    {restoreData.transactions?.length || 0} transaksi
+                  </Text>
+                </View>
+                <View style={st.restoreSummaryRow}>
+                  <Ionicons name="grid-outline" size={16} color={colors.brand} />
+                  <Text style={{ color: colors.text, fontFamily: fonts.medium, fontSize: 13, flex: 1 }}>
+                    {restoreData.categories?.length || 0} kategori
+                  </Text>
+                </View>
+                <View style={st.restoreSummaryRow}>
+                  <Ionicons name="wallet-outline" size={16} color={colors.brand} />
+                  <Text style={{ color: colors.text, fontFamily: fonts.medium, fontSize: 13, flex: 1 }}>
+                    {restoreData.budgets?.length || 0} anggaran
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            <View style={[{ backgroundColor: 'rgba(211,74,62,0.08)', borderRadius: 10, padding: 12, marginTop: 12 }]}>
+              <Text style={{ color: colors.expense, fontFamily: fonts.medium, fontSize: 12, textAlign: 'center' }}>
+                ⚠️ Perhatian: Semua transaksi dan anggaran yang ada saat ini akan dihapus dan diganti.
+              </Text>
+            </View>
+
+            <View style={st.confirmActions}>
+              <TouchableOpacity
+                style={[st.confirmBtn, { borderColor: colors.border, borderWidth: 1 }]}
+                onPress={() => { setShowRestoreConfirm(false); setRestoreData(null); }}
+                disabled={restoring}
+              >
+                <Text style={[st.confirmBtnText, { color: colors.textSecondary, fontFamily: fonts.semiBold }]}>Batal</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[st.confirmBtn, { backgroundColor: colors.accent }]}
+                onPress={confirmRestore}
+                disabled={restoring}
+              >
+                {restoring ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <Text style={[st.confirmBtnText, { color: '#FFF', fontFamily: fonts.semiBold }]}>Restore</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -510,4 +664,6 @@ const st = StyleSheet.create({
   confirmActions: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, marginTop: 8 },
   confirmBtn: { flex: 1, height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
   confirmBtnText: { fontSize: 15 },
+  restoreSummary: { borderRadius: 12, padding: 14, borderWidth: 1, marginTop: 4 },
+  restoreSummaryRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 4 },
 });

@@ -1,24 +1,57 @@
-from dotenv import load_dotenv
-from pathlib import Path
-load_dotenv(Path(__file__).parent / '.env')
-
-from fastapi import FastAPI, APIRouter, Query, HTTPException, Depends, Request, BackgroundTasks
-from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
-import os, logging, uuid, csv, io, bcrypt, jwt
-from datetime import datetime, timezone, timedelta
-from pydantic import BaseModel
-from typing import Optional, List
-from fastapi.responses import StreamingResponse
 import asyncio
+import bcrypt
+import csv
 import httpx
+import io
+import jwt
+import logging
+import os
 import random
 import re
-import yfinance as yf
 import requests
-from concurrent.futures import ThreadPoolExecutor
+import uuid
+from contextlib import asynccontextmanager
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import Optional
 
-mongo_url = os.environ['MONGO_URL']
+import yfinance as yf
+from dotenv import load_dotenv
+from fastapi import (APIRouter, BackgroundTasks, Depends, FastAPI, HTTPException,
+                     Query, Request)
+from fastapi.responses import StreamingResponse
+from motor.motor_asyncio import AsyncIOMotorClient
+from pydantic import BaseModel
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
+from starlette.middleware.cors import CORSMiddleware
+
+load_dotenv(Path(__file__).parent / '.env')
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# ==================== Env Validation ====================
+
+
+def _require_env(name: str, min_length: int = 0) -> str:
+    val = os.environ.get(name, "")
+    if not val:
+        raise RuntimeError(f"Env var {name} is required but not set")
+    if min_length and len(val) < min_length:
+        raise RuntimeError(f"Env var {name} must be at least {min_length} characters (got {len(val)})")
+    return val
+
+
+mongo_url = _require_env("MONGO_URL")
+DB_NAME = _require_env("DB_NAME")
+JWT_SECRET = _require_env("JWT_SECRET", min_length=32)
+JWT_ALG = "HS256"
+
+EMAIL_REGEX = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$")
+PUSH_TOKEN_REGEX = re.compile(r"^(ExponentPushToken\[[A-Za-z0-9_\-]+\]|ExpoPushToken\[[A-Za-z0-9_\-]+\])$")
+
 client = AsyncIOMotorClient(
     mongo_url,
     maxPoolSize=int(os.environ.get("MONGO_MAX_POOL", "20")),
@@ -27,9 +60,8 @@ client = AsyncIOMotorClient(
     serverSelectionTimeoutMS=5000,
     socketTimeoutMS=10000,
 )
-db = client[os.environ['DB_NAME']]
-JWT_SECRET = os.environ['JWT_SECRET']
-JWT_ALG = "HS256"
+db = client[DB_NAME]
+
 
 def month_range_query(month: str) -> dict:
     """Konversi '2025-01' menjadi range query yang bisa menggunakan index."""
@@ -41,31 +73,28 @@ def month_range_query(month: str) -> dict:
     end = f"{next_y}-{str(next_m).zfill(2)}-01"
     return {"$gte": start, "$lt": end}
 
-app = FastAPI()
-api_router = APIRouter(prefix="/api")
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
 
 limiter = Limiter(key_func=get_remote_address)
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+api_router = APIRouter(prefix="/api")
 
 # ==================== Auth Helpers ====================
+
+
 def hash_password(pw: str) -> str:
     return bcrypt.hashpw(pw.encode(), bcrypt.gensalt()).decode()
+
 
 def verify_password(pw: str, hashed: str) -> bool:
     return bcrypt.checkpw(pw.encode(), hashed.encode())
 
+
 def create_access_token(user_id: str, email: str) -> str:
     return jwt.encode({"sub": user_id, "email": email, "exp": datetime.now(timezone.utc) + timedelta(days=7), "type": "access"}, JWT_SECRET, algorithm=JWT_ALG)
 
+
 def create_refresh_token(user_id: str) -> str:
     return jwt.encode({"sub": user_id, "exp": datetime.now(timezone.utc) + timedelta(days=30), "type": "refresh"}, JWT_SECRET, algorithm=JWT_ALG)
+
 
 async def get_current_user(request: Request) -> dict:
     token = request.headers.get("Authorization", "").replace("Bearer ", "")
@@ -85,20 +114,25 @@ async def get_current_user(request: Request) -> dict:
         raise HTTPException(401, "Invalid token")
 
 # ==================== Models ====================
+
+
 class AuthRegister(BaseModel):
     name: str
     email: str
     password: str
 
+
 class AuthLogin(BaseModel):
     email: str
     password: str
+
 
 class CategoryCreate(BaseModel):
     name: str
     type: str
     icon: str
     color: str
+
 
 class TransactionCreate(BaseModel):
     type: str
@@ -108,6 +142,7 @@ class TransactionCreate(BaseModel):
     date: str
     photo_uri: str = ""
 
+
 class TransactionUpdate(BaseModel):
     type: Optional[str] = None
     amount: Optional[float] = None
@@ -116,10 +151,12 @@ class TransactionUpdate(BaseModel):
     date: Optional[str] = None
     photo_uri: Optional[str] = None
 
+
 class BudgetCreate(BaseModel):
     category_id: str
     amount: float
     month: str
+
 
 class SettingsUpdate(BaseModel):
     currency: Optional[str] = None
@@ -130,26 +167,32 @@ class SettingsUpdate(BaseModel):
     weekly_report_day: Optional[int] = None  # 1=Mon, 2=Tue, ..., 7=Sun
     weekly_report_hour: Optional[int] = None  # 0-23
 
+
 class PushTokenRequest(BaseModel):
     token: str
 
+
 class PinRequest(BaseModel):
     pin: str
+
 
 class BackupData(BaseModel):
     transactions: list = []
     categories: list = []
     budgets: list = []
 
+
 class InvestmentCreate(BaseModel):
     ticker: str
     lot_count: int
     average_buy_price: float
 
+
 class InvestmentUpdate(BaseModel):
     ticker: Optional[str] = None
     lot_count: Optional[int] = None
     average_buy_price: Optional[float] = None
+
 
 # ==================== Default Categories ====================
 DEFAULT_CATEGORIES = [
@@ -169,11 +212,12 @@ DEFAULT_CATEGORIES = [
     {"name": "Lainnya", "type": "income", "icon": "ellipsis-horizontal", "color": "#C2A878"},
 ]
 
-# ==================== Startup ====================
-@app.on_event("startup")
-async def startup():
+# ==================== Startup / Lifespan ====================
+
+
+async def _init_app_state():
     await db.users.create_index("email", unique=True)
-    
+
     # Index paling penting — query utama semua analytics
     await db.transactions.create_index(
         [("user_id", 1), ("date", -1)],
@@ -203,7 +247,7 @@ async def startup():
         unique=True,
         name="user_ticker_unique"
     )
-    
+
     # Seed categories
     if await db.categories.count_documents({"is_default": True}) == 0:
         cats = [{"id": str(uuid.uuid4()), **c, "is_default": True, "created_at": datetime.now(timezone.utc).isoformat()} for c in DEFAULT_CATEGORIES]
@@ -244,13 +288,14 @@ async def startup():
                             {"user_id": {"$exists": False}},
                             {"$set": {"user_id": admin_id}}
                         )
-    
+
     # Migrate investments to separate collection
     # Safe Migration: Copy investments from users docs to separate collection if they exist
     users_with_inv = await db.users.find({"investments": {"$exists": True}}).to_list(None)
     for u in users_with_inv:
         uid = u.get('id')
-        if not uid: continue
+        if not uid:
+            continue
         user_investments = u.get('investments', [])
         for inv in user_investments:
             # Ensure consistency with new schema
@@ -264,20 +309,48 @@ async def startup():
         # Only unset after successful migration for this user
         await db.users.update_one({"id": uid}, {"$unset": {"investments": ""}})
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    try:
+        await _init_app_state()
+    except Exception as e:
+        logger.exception("App init failed: %s", e)
+    yield
+    try:
+        client.close()
+    except Exception:
+        pass
+
+
+app = FastAPI(lifespan=lifespan)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 # ==================== Auth Endpoints ====================
+
+
 @api_router.post("/auth/register")
 @limiter.limit("5/minute")
 async def register(request: Request, data: AuthRegister):
     email = data.email.lower().strip()
+    name = data.name.strip()
+    if not EMAIL_REGEX.match(email):
+        raise HTTPException(400, "Format email tidak valid")
+    if not name or len(name) > 80:
+        raise HTTPException(400, "Nama wajib diisi (maks 80 karakter)")
+    if len(data.password) < 8:
+        raise HTTPException(400, "Password minimal 8 karakter")
+    if not re.search(r"[A-Za-z]", data.password) or not re.search(r"\d", data.password):
+        raise HTTPException(400, "Password harus mengandung huruf dan angka")
     if await db.users.find_one({"email": email}):
         raise HTTPException(400, "Email sudah terdaftar")
-    if len(data.password) < 6:
-        raise HTTPException(400, "Password minimal 6 karakter")
     user_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
-    await db.users.insert_one({"id": user_id, "email": email, "password_hash": hash_password(data.password), "name": data.name.strip(), "role": "user", "created_at": now})
+    await db.users.insert_one({"id": user_id, "email": email, "password_hash": hash_password(data.password), "name": name, "role": "user", "created_at": now})
     await db.settings.insert_one({"user_id": user_id, "currency": "IDR", "theme": "light", "pin_hash": ""})
     return {"user": {"id": user_id, "email": email, "name": data.name.strip(), "role": "user"}, "access_token": create_access_token(user_id, email), "refresh_token": create_refresh_token(user_id)}
+
 
 @api_router.post("/auth/login")
 @limiter.limit("10/minute")
@@ -289,9 +362,11 @@ async def login(request: Request, data: AuthLogin):
     uid = user["id"]
     return {"user": {"id": uid, "email": user["email"], "name": user.get("name", ""), "role": user.get("role", "user")}, "access_token": create_access_token(uid, user["email"]), "refresh_token": create_refresh_token(uid)}
 
+
 @api_router.get("/auth/me")
 async def get_me(user: dict = Depends(get_current_user)):
     return {"user": user}
+
 
 @api_router.post("/auth/refresh")
 async def refresh_token(request: Request):
@@ -308,6 +383,8 @@ async def refresh_token(request: Request):
         raise HTTPException(401, "Token expired")
 
 # ==================== Health ====================
+
+
 @api_router.get("/health")
 async def health():
     try:
@@ -317,11 +394,14 @@ async def health():
         raise HTTPException(503, f"Database unavailable: {str(e)}")
 
 # ==================== Categories ====================
+
+
 @api_router.get("/categories")
 async def get_categories(type: Optional[str] = None, user: dict = Depends(get_current_user)):
     base = {"$or": [{"is_default": True}, {"user_id": user["id"]}]}
     query = {"$and": [base, {"type": type}]} if type else base
     return await db.categories.find(query, {"_id": 0}).to_list(100)
+
 
 @api_router.post("/categories")
 async def create_category(data: CategoryCreate, user: dict = Depends(get_current_user)):
@@ -330,40 +410,56 @@ async def create_category(data: CategoryCreate, user: dict = Depends(get_current
     d.pop("_id", None)
     return d
 
+
 @api_router.put("/categories/{cid}")
 async def update_category(cid: str, data: CategoryCreate, user: dict = Depends(get_current_user)):
     e = await db.categories.find_one({"id": cid})
-    if not e: raise HTTPException(404, "Tidak ditemukan")
-    if e.get("is_default"): raise HTTPException(400, "Tidak bisa ubah default")
-    if e.get("user_id") != user["id"]: raise HTTPException(403, "Akses ditolak")
+    if not e:
+        raise HTTPException(404, "Tidak ditemukan")
+    if e.get("is_default"):
+        raise HTTPException(400, "Tidak bisa ubah default")
+    if e.get("user_id") != user["id"]:
+        raise HTTPException(403, "Akses ditolak")
     await db.categories.update_one({"id": cid}, {"$set": data.model_dump()})
     return await db.categories.find_one({"id": cid}, {"_id": 0})
+
 
 @api_router.delete("/categories/{cid}")
 async def delete_category(cid: str, user: dict = Depends(get_current_user)):
     e = await db.categories.find_one({"id": cid})
-    if not e: raise HTTPException(404, "Tidak ditemukan")
-    if e.get("is_default"): raise HTTPException(400, "Tidak bisa hapus default")
-    if e.get("user_id") != user["id"]: raise HTTPException(403, "Akses ditolak")
+    if not e:
+        raise HTTPException(404, "Tidak ditemukan")
+    if e.get("is_default"):
+        raise HTTPException(400, "Tidak bisa hapus default")
+    if e.get("user_id") != user["id"]:
+        raise HTTPException(403, "Akses ditolak")
     await db.categories.delete_one({"id": cid})
     return {"message": "Dihapus"}
 
 # ==================== Transactions ====================
+
+
 @api_router.get("/transactions")
 async def get_transactions(page: int = Query(1, ge=1), limit: int = Query(20, ge=1, le=100), type: Optional[str] = None, category_id: Optional[str] = None, month: Optional[str] = None, sort_by: str = "date", sort_order: str = "desc", user: dict = Depends(get_current_user)):
     q = {"user_id": user["id"]}
-    if type: q["type"] = type
-    if category_id: q["category_id"] = category_id
-    if month: q["date"] = month_range_query(month)
+    if type:
+        q["type"] = type
+    if category_id:
+        q["category_id"] = category_id
+    if month:
+        q["date"] = month_range_query(month)
     total = await db.transactions.count_documents(q)
-    txs = await db.transactions.find(q, {"_id": 0}).sort(sort_by, -1 if sort_order == "desc" else 1).skip((page-1)*limit).limit(limit).to_list(limit)
-    return {"transactions": txs, "total": total, "page": page, "limit": limit, "pages": max(1, (total+limit-1)//limit)}
+    txs = await db.transactions.find(q, {"_id": 0}).sort(sort_by, -1 if sort_order == "desc" else 1).skip((page - 1) * limit).limit(limit).to_list(limit)
+    return {"transactions": txs, "total": total, "page": page, "limit": limit, "pages": max(1, (total + limit - 1) // limit)}
+
 
 @api_router.get("/transactions/{tid}")
 async def get_transaction(tid: str, user: dict = Depends(get_current_user)):
     tx = await db.transactions.find_one({"id": tid, "user_id": user["id"]}, {"_id": 0})
-    if not tx: raise HTTPException(404, "Tidak ditemukan")
+    if not tx:
+        raise HTTPException(404, "Tidak ditemukan")
     return tx
+
 
 @api_router.post("/transactions")
 async def create_transaction(data: TransactionCreate, user: dict = Depends(get_current_user)):
@@ -373,27 +469,35 @@ async def create_transaction(data: TransactionCreate, user: dict = Depends(get_c
     d.pop("_id", None)
     return d
 
+
 @api_router.put("/transactions/{tid}")
 async def update_transaction(tid: str, data: TransactionUpdate, user: dict = Depends(get_current_user)):
     e = await db.transactions.find_one({"id": tid, "user_id": user["id"]})
-    if not e: raise HTTPException(404, "Tidak ditemukan")
+    if not e:
+        raise HTTPException(404, "Tidak ditemukan")
     upd = {k: v for k, v in data.model_dump().items() if v is not None}
     upd["updated_at"] = datetime.now(timezone.utc).isoformat()
     await db.transactions.update_one({"id": tid}, {"$set": upd})
     return await db.transactions.find_one({"id": tid}, {"_id": 0})
 
+
 @api_router.delete("/transactions/{tid}")
 async def delete_transaction(tid: str, user: dict = Depends(get_current_user)):
     r = await db.transactions.delete_one({"id": tid, "user_id": user["id"]})
-    if r.deleted_count == 0: raise HTTPException(404, "Tidak ditemukan")
+    if r.deleted_count == 0:
+        raise HTTPException(404, "Tidak ditemukan")
     return {"message": "Dihapus"}
 
 # ==================== Budgets ====================
+
+
 @api_router.get("/budgets")
 async def get_budgets(month: Optional[str] = None, user: dict = Depends(get_current_user)):
     q = {"user_id": user["id"]}
-    if month: q["month"] = month
+    if month:
+        q["month"] = month
     return await db.budgets.find(q, {"_id": 0}).to_list(100)
+
 
 @api_router.post("/budgets")
 async def create_budget(data: BudgetCreate, user: dict = Depends(get_current_user)):
@@ -407,18 +511,23 @@ async def create_budget(data: BudgetCreate, user: dict = Depends(get_current_use
     d.pop("_id", None)
     return d
 
+
 @api_router.delete("/budgets/{bid}")
 async def delete_budget(bid: str, user: dict = Depends(get_current_user)):
     r = await db.budgets.delete_one({"id": bid, "user_id": user["id"]})
-    if r.deleted_count == 0: raise HTTPException(404, "Tidak ditemukan")
+    if r.deleted_count == 0:
+        raise HTTPException(404, "Tidak ditemukan")
     return {"message": "Dihapus"}
 
 # ==================== Analytics ====================
+
+
 @api_router.get("/analytics/summary")
 async def get_summary(month: Optional[str] = None, user: dict = Depends(get_current_user)):
     uid = user["id"]
     mq = {"user_id": uid}
-    if month: mq["date"] = month_range_query(month)
+    if month:
+        mq["date"] = month_range_query(month)
     pipe = [{"$match": mq}, {"$group": {"_id": "$type", "total": {"$sum": "$amount"}}}]
     res = await db.transactions.aggregate(pipe).to_list(10)
     inc = sum(r["total"] for r in res if r["_id"] == "income")
@@ -430,10 +539,12 @@ async def get_summary(month: Optional[str] = None, user: dict = Depends(get_curr
     tc = await db.transactions.count_documents(mq)
     return {"balance": ti - te, "month_income": inc, "month_expense": exp, "month_net": inc - exp, "transaction_count": tc}
 
+
 @api_router.get("/analytics/category-breakdown")
 async def get_breakdown(month: Optional[str] = None, type: str = "expense", user: dict = Depends(get_current_user)):
     q = {"user_id": user["id"], "type": type}
-    if month: q["date"] = month_range_query(month)
+    if month:
+        q["date"] = month_range_query(month)
     pipe = [{"$match": q}, {"$group": {"_id": "$category_id", "total": {"$sum": "$amount"}}}, {"$sort": {"total": -1}}]
     res = await db.transactions.aggregate(pipe).to_list(50)
     gt = sum(r["total"] for r in res)
@@ -446,15 +557,16 @@ async def get_breakdown(month: Optional[str] = None, type: str = "expense", user
         for r in res:
             cat = cat_map.get(r["_id"])
             if cat:
-                bd.append({"category_id": r["_id"], "category_name": cat["name"], "category_icon": cat["icon"], "category_color": cat["color"], "total": r["total"], "percentage": round(r["total"]/gt*100,1) if gt > 0 else 0})
+                bd.append({"category_id": r["_id"], "category_name": cat["name"], "category_icon": cat["icon"], "category_color": cat["color"], "total": r["total"], "percentage": round(r["total"] / gt * 100, 1) if gt > 0 else 0})
     return {"breakdown": bd, "total": gt}
+
 
 @api_router.get("/analytics/daily-trend")
 async def get_daily_trend(days: int = Query(7, ge=1, le=30), user: dict = Depends(get_current_user)):
     end = datetime.now(timezone.utc)
-    start = end - timedelta(days=days-1)
+    start = end - timedelta(days=days - 1)
     ss, es = start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")
-    pipe = [{"$match": {"user_id": user["id"], "date": {"$gte": ss, "$lte": es+"T23:59:59"}}}, {"$addFields": {"day": {"$substr": ["$date", 0, 10]}}}, {"$group": {"_id": {"day": "$day", "type": "$type"}, "total": {"$sum": "$amount"}}}, {"$sort": {"_id.day": 1}}]
+    pipe = [{"$match": {"user_id": user["id"], "date": {"$gte": ss, "$lte": es + "T23:59:59"}}}, {"$addFields": {"day": {"$substr": ["$date", 0, 10]}}}, {"$group": {"_id": {"day": "$day", "type": "$type"}, "total": {"$sum": "$amount"}}}, {"$sort": {"_id.day": 1}}]
     res = await db.transactions.aggregate(pipe).to_list(100)
     daily = {}
     for i in range(days):
@@ -462,38 +574,73 @@ async def get_daily_trend(days: int = Query(7, ge=1, le=30), user: dict = Depend
         daily[d] = {"date": d, "income": 0, "expense": 0}
     for r in res:
         d = r["_id"]["day"]
-        if d in daily: daily[d][r["_id"]["type"]] = r["total"]
+        if d in daily:
+            daily[d][r["_id"]["type"]] = r["total"]
     return list(daily.values())
+
 
 @api_router.get("/analytics/monthly-trend")
 async def get_monthly_trend(months: int = Query(6, ge=1, le=12), user: dict = Depends(get_current_user)):
     now = datetime.now(timezone.utc)
+    # Hitung bulan earliest (inklusif) dan latest+1 (eksklusif) untuk range query.
+    start_y, start_m = now.year, now.month - (months - 1)
+    while start_m <= 0:
+        start_m += 12
+        start_y -= 1
+    start_str = f"{start_y}-{str(start_m).zfill(2)}-01"
+    end_m = now.month + 1
+    end_y = now.year
+    if end_m > 12:
+        end_m -= 12
+        end_y += 1
+    end_str = f"{end_y}-{str(end_m).zfill(2)}-01"
+
+    pipe = [
+        {"$match": {"user_id": user["id"], "date": {"$gte": start_str, "$lt": end_str}}},
+        {"$group": {"_id": {"month": {"$substr": ["$date", 0, 7]}, "type": "$type"}, "total": {"$sum": "$amount"}}},
+    ]
+    agg = await db.transactions.aggregate(pipe).to_list(1000)
+
+    # Pre-fill seluruh bulan dalam range supaya output selalu konsisten.
+    trend_map: dict = {}
+    y, m = start_y, start_m
+    for _ in range(months):
+        key = f"{y}-{str(m).zfill(2)}"
+        trend_map[key] = {"month": key, "income": 0, "expense": 0, "net": 0}
+        m += 1
+        if m > 12:
+            m = 1
+            y += 1
+
+    for row in agg:
+        key = row["_id"]["month"]
+        t = row["_id"]["type"]
+        if key in trend_map and t in ("income", "expense"):
+            trend_map[key][t] = row["total"]
+
     trend = []
-    for i in range(months-1, -1, -1):
-        m = now.month - i
-        y = now.year
-        while m <= 0: m += 12; y -= 1
-        ms = f"{y}-{str(m).zfill(2)}"
-        pipe = [{"$match": {"user_id": user["id"], "date": month_range_query(ms)}}, {"$group": {"_id": "$type", "total": {"$sum": "$amount"}}}]
-        res = await db.transactions.aggregate(pipe).to_list(10)
-        inc = sum(r["total"] for r in res if r["_id"] == "income")
-        exp = sum(r["total"] for r in res if r["_id"] == "expense")
-        trend.append({"month": ms, "income": inc, "expense": exp, "net": inc - exp})
+    for v in trend_map.values():
+        v["net"] = v["income"] - v["expense"]
+        trend.append(v)
     return trend
+
 
 @api_router.get("/analytics/stats")
 async def get_stats(month: Optional[str] = None, user: dict = Depends(get_current_user)):
     q = {"user_id": user["id"], "type": "expense"}
-    if month: q["date"] = month_range_query(month)
+    if month:
+        q["date"] = month_range_query(month)
     pipe = [{"$match": q}, {"$addFields": {"day": {"$substr": ["$date", 0, 10]}}}, {"$group": {"_id": "$day", "total": {"$sum": "$amount"}}}]
     dr = await db.transactions.aggregate(pipe).to_list(31)
     if dr:
         totals = [r["total"] for r in dr]
         h = max(dr, key=lambda x: x["total"])
-        return {"avg_daily_expense": round(sum(totals)/len(totals)), "highest_day": h["_id"], "highest_day_amount": h["total"], "days_with_expense": len(dr)}
+        return {"avg_daily_expense": round(sum(totals) / len(totals)), "highest_day": h["_id"], "highest_day_amount": h["total"], "days_with_expense": len(dr)}
     return {"avg_daily_expense": 0, "highest_day": "", "highest_day_amount": 0, "days_with_expense": 0}
 
 # ==================== Weekly Report ====================
+
+
 @api_router.get("/reports/weekly")
 async def get_weekly_report(user: dict = Depends(get_current_user)):
     end = datetime.now(timezone.utc)
@@ -501,15 +648,15 @@ async def get_weekly_report(user: dict = Depends(get_current_user)):
     ss, es = start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")
     uid = user["id"]
     # Expenses
-    ep = [{"$match": {"user_id": uid, "type": "expense", "date": {"$gte": ss, "$lte": es+"T23:59:59"}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]
+    ep = [{"$match": {"user_id": uid, "type": "expense", "date": {"$gte": ss, "$lte": es + "T23:59:59"}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]
     er = await db.transactions.aggregate(ep).to_list(1)
     total_exp = er[0]["total"] if er else 0
     # Income
-    ip = [{"$match": {"user_id": uid, "type": "income", "date": {"$gte": ss, "$lte": es+"T23:59:59"}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]
+    ip = [{"$match": {"user_id": uid, "type": "income", "date": {"$gte": ss, "$lte": es + "T23:59:59"}}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]
     ir = await db.transactions.aggregate(ip).to_list(1)
     total_inc = ir[0]["total"] if ir else 0
     # Top category
-    cp = [{"$match": {"user_id": uid, "type": "expense", "date": {"$gte": ss, "$lte": es+"T23:59:59"}}}, {"$group": {"_id": "$category_id", "total": {"$sum": "$amount"}}}, {"$sort": {"total": -1}}, {"$limit": 1}]
+    cp = [{"$match": {"user_id": uid, "type": "expense", "date": {"$gte": ss, "$lte": es + "T23:59:59"}}}, {"$group": {"_id": "$category_id", "total": {"$sum": "$amount"}}}, {"$sort": {"total": -1}}, {"$limit": 1}]
     cr = await db.transactions.aggregate(cp).to_list(1)
     top_cat = None
     if cr:
@@ -520,10 +667,12 @@ async def get_weekly_report(user: dict = Depends(get_current_user)):
     budgets = await db.budgets.find({"user_id": uid, "month": month}, {"_id": 0}).to_list(100)
     total_budget = sum(b["amount"] for b in budgets)
     budget_pct = round(total_exp / total_budget * 100, 1) if total_budget > 0 else 0
-    tc = await db.transactions.count_documents({"user_id": uid, "date": {"$gte": ss, "$lte": es+"T23:59:59"}})
+    tc = await db.transactions.count_documents({"user_id": uid, "date": {"$gte": ss, "$lte": es + "T23:59:59"}})
     return {"period_start": ss, "period_end": es, "total_expense": total_exp, "total_income": total_inc, "net": total_inc - total_exp, "top_category": top_cat, "total_budget": total_budget, "budget_used_pct": budget_pct, "transaction_count": tc}
 
 # ==================== Settings ====================
+
+
 @api_router.get("/settings")
 async def get_settings(user: dict = Depends(get_current_user)):
     s = await db.settings.find_one({"user_id": user["id"]}, {"_id": 0})
@@ -540,6 +689,7 @@ async def get_settings(user: dict = Depends(get_current_user)):
     s.setdefault("weekly_report_hour", 9)
     return s
 
+
 @api_router.put("/settings")
 async def update_settings(data: SettingsUpdate, user: dict = Depends(get_current_user)):
     upd = {k: v for k, v in data.model_dump().items() if v is not None}
@@ -549,10 +699,15 @@ async def update_settings(data: SettingsUpdate, user: dict = Depends(get_current
     s.pop("pin_hash", None)
     return s
 
+
 @api_router.post("/notifications/register")
 async def register_push_token(data: PushTokenRequest, user: dict = Depends(get_current_user)):
-    await db.settings.update_one({"user_id": user["id"]}, {"$set": {"push_token": data.token}}, upsert=True)
+    token = (data.token or "").strip()
+    if not token or not PUSH_TOKEN_REGEX.match(token):
+        raise HTTPException(400, "Token push tidak valid")
+    await db.settings.update_one({"user_id": user["id"]}, {"$set": {"push_token": token}}, upsert=True)
     return {"message": "Token registered"}
+
 
 @api_router.post("/settings/pin/set")
 async def set_pin(data: PinRequest, user: dict = Depends(get_current_user)):
@@ -562,6 +717,7 @@ async def set_pin(data: PinRequest, user: dict = Depends(get_current_user)):
     await db.settings.update_one({"user_id": user["id"]}, {"$set": {"pin_hash": h}}, upsert=True)
     return {"message": "PIN diatur", "has_pin": True}
 
+
 @api_router.post("/settings/pin/verify")
 async def verify_pin(data: PinRequest, user: dict = Depends(get_current_user)):
     s = await db.settings.find_one({"user_id": user["id"]})
@@ -570,6 +726,7 @@ async def verify_pin(data: PinRequest, user: dict = Depends(get_current_user)):
     if bcrypt.checkpw(data.pin.encode(), s["pin_hash"].encode()):
         return {"valid": True}
     raise HTTPException(401, "PIN salah")
+
 
 @api_router.delete("/settings/pin")
 async def remove_pin(user: dict = Depends(get_current_user)):
@@ -593,18 +750,19 @@ SCREAPER_HEADERS = {
     "Pragma": "no-cache",
 }
 
+
 async def fetch_google_finance_price(ticker: str) -> Optional[float]:
     """Scrape price from Google Finance (High reliability for IDX)."""
     try:
         # BBCA.JK -> BBCA:IDX
         symbol = ticker.split('.')[0]
         url = f"https://www.google.com/finance/quote/{symbol}:IDX"
-        
+
         async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
             resp = await client.get(url, headers=SCREAPER_HEADERS)
             if resp.status_code != 200:
                 return None
-            
+
             import re
             # <div class="YMlKec fxKbKc">Rp 6,575.00</div>
             match = re.search(r'class="YMlKec fxKbKc">([^<]+)</div>', resp.text)
@@ -619,26 +777,27 @@ async def fetch_google_finance_price(ticker: str) -> Optional[float]:
                 if '.' in cleaned and ',' in cleaned:
                     dot_idx = cleaned.rfind('.')
                     comma_idx = cleaned.rfind(',')
-                    if dot_idx > comma_idx: # Dot is decimal
+                    if dot_idx > comma_idx:  # Dot is decimal
                         return float(cleaned.replace(',', ''))
-                    else: # Comma is decimal
+                    else:  # Comma is decimal
                         return float(cleaned.replace('.', '').replace(',', '.'))
                 elif '.' in cleaned:
                     parts = cleaned.split('.')
-                    if len(parts[-1]) == 2: # Decimal
+                    if len(parts[-1]) == 2:  # Decimal
                         return float(cleaned)
-                    else: # Thousands
+                    else:  # Thousands
                         return float(cleaned.replace('.', ''))
                 elif ',' in cleaned:
                     parts = cleaned.split(',')
-                    if len(parts[-1]) == 2: # Decimal
+                    if len(parts[-1]) == 2:  # Decimal
                         return float(cleaned.replace(',', '.'))
-                    else: # Thousands
+                    else:  # Thousands
                         return float(cleaned.replace(',', ''))
                 return float(cleaned) if cleaned else None
     except Exception as e:
         logger.warning(f"Google Finance scrape failed for {ticker}: {e}")
     return None
+
 
 async def fetch_stock_price(ticker: str) -> Optional[dict]:
     y_ticker = ticker if '.JK' in ticker else f"{ticker}.JK"
@@ -709,6 +868,7 @@ async def _do_update_prices(uid: str):
             upsert=True
         )
 
+
 @api_router.post("/portfolio/update-prices")
 async def update_market_prices(
     background_tasks: BackgroundTasks,
@@ -718,6 +878,7 @@ async def update_market_prices(
     return {"message": "Price update dimulai di background"}
 
 PRICE_STALE_SECONDS = 300  # 5 minutes
+
 
 async def _refresh_ticker_price(ticker: str):
     """Fetch fresh price for a single ticker and update db.market_prices."""
@@ -738,10 +899,11 @@ async def _refresh_ticker_price(ticker: str):
         logger.warning(f"Auto-refresh failed for {ticker}: {e}")
     return None
 
+
 @api_router.get("/portfolio/net-worth")
 async def get_net_worth(user: dict = Depends(get_current_user)):
     uid = user["id"]
-    
+
     # 1. Get liquid assets
     pipe = [{"$match": {"user_id": uid}}, {"$group": {"_id": "$type", "total": {"$sum": "$amount"}}}]
     res = await db.transactions.aggregate(pipe).to_list(10)
@@ -751,7 +913,7 @@ async def get_net_worth(user: dict = Depends(get_current_user)):
 
     # 2. Get investments
     investments = await db.investments.find({"user_id": uid}, {"_id": 0}).to_list(100)
-    
+
     if not investments:
         return {
             "liquid_asset": liquid_asset,
@@ -761,11 +923,11 @@ async def get_net_worth(user: dict = Depends(get_current_user)):
             "total_unrealized_pl_percentage": 0,
             "holdings": []
         }
-    
+
     tickers = [inv["ticker"] for inv in investments]
     prices_list = await db.market_prices.find({"ticker": {"$in": tickers}}, {"_id": 0}).to_list(len(tickers))
     price_map = {p["ticker"]: p for p in prices_list}
-    
+
     # 3. Auto-refresh stale prices (older than 5 minutes)
     now = datetime.now(timezone.utc)
     stale_tickers = []
@@ -780,7 +942,7 @@ async def get_net_worth(user: dict = Depends(get_current_user)):
                     stale_tickers.append(ticker_)
             except Exception:
                 stale_tickers.append(ticker_)
-    
+
     if stale_tickers:
         logger.info(f"Auto-refreshing {len(stale_tickers)} stale tickers: {stale_tickers}")
         fresh_results = await asyncio.gather(*[_refresh_ticker_price(t) for t in stale_tickers])
@@ -798,21 +960,21 @@ async def get_net_worth(user: dict = Depends(get_current_user)):
         lot_count = inv["lot_count"]
         avg_price = inv["average_buy_price"]
         shares = lot_count * 100
-        
+
         market_data = price_map.get(ticker)
         market_data = market_data or {}
-        
+
         # FIX: If price is 0 or missing, fallback to avg_price to avoid -100% P/L errors
         current_m_price = market_data.get("price", 0)
         current_price = current_m_price if current_m_price > 0 else avg_price
-        
+
         current_value = current_price * shares
         total_cost = avg_price * shares
         pl = current_value - total_cost
-        
+
         total_investment_value += current_value
         total_unrealized_pl += pl
-        
+
         holdings.append({
             "ticker": ticker,
             "lot_count": lot_count,
@@ -841,25 +1003,26 @@ async def get_net_worth(user: dict = Depends(get_current_user)):
         "holdings": holdings
     }
 
+
 @api_router.post("/portfolio/investments")
 async def add_investment(data: InvestmentCreate, user: dict = Depends(get_current_user)):
     uid = user["id"]
     ticker = data.ticker.upper().strip()
     if ticker and not ticker.endswith(".JK"):
         ticker += ".JK"
-        
+
     inv = await db.investments.find_one({"user_id": uid, "ticker": ticker})
-        
+
     if inv:
         total_shares_old = inv["lot_count"] * 100
         total_cost_old = total_shares_old * inv["average_buy_price"]
         total_shares_new = data.lot_count * 100
         total_cost_new = total_shares_new * data.average_buy_price
-        
+
         lot_count = inv["lot_count"] + data.lot_count
         new_shares = lot_count * 100
         avg_price = (total_cost_old + total_cost_new) / new_shares if new_shares > 0 else 0
-        
+
         await db.investments.update_one(
             {"user_id": uid, "ticker": ticker},
             {"$set": {"lot_count": lot_count, "average_buy_price": avg_price}}
@@ -873,9 +1036,9 @@ async def add_investment(data: InvestmentCreate, user: dict = Depends(get_curren
             "average_buy_price": data.average_buy_price,
             "created_at": datetime.now(timezone.utc).isoformat()
         })
-        
+
     investments = await db.investments.find({"user_id": uid}, {"_id": 0}).to_list(100)
-    
+
     # Immediately fetch price for this ticker to ensure UI has data
     price_data = await fetch_stock_price(ticker)
     if price_data and isinstance(price_data, dict):
@@ -891,27 +1054,29 @@ async def add_investment(data: InvestmentCreate, user: dict = Depends(get_curren
 
     return {"message": "Investment added", "investments": investments}
 
+
 @api_router.put("/portfolio/investments/{ticker:path}")
 async def update_investment(ticker: str, data: InvestmentUpdate, user: dict = Depends(get_current_user)):
     uid = user["id"]
     target_ticker = ticker.upper().strip()
-    
+
     inv = await db.investments.find_one({"user_id": uid, "ticker": target_ticker})
     if not inv:
         raise HTTPException(404, "Investment not found")
-        
+
     upd = {}
     if data.lot_count is not None:
         upd["lot_count"] = data.lot_count
     if data.average_buy_price is not None:
         upd["average_buy_price"] = data.average_buy_price
-        
+
     if upd:
         await db.investments.update_one({"user_id": uid, "ticker": target_ticker}, {"$set": upd})
-        
+
     investments = await db.investments.find({"user_id": uid}, {"_id": 0}).to_list(100)
     return {"message": "Investment updated", "investments": investments}
-    
+
+
 @api_router.delete("/portfolio/investments/{ticker:path}")
 async def delete_investment(ticker: str, user: dict = Depends(get_current_user)):
     uid = user["id"]
@@ -920,10 +1085,13 @@ async def delete_investment(ticker: str, user: dict = Depends(get_current_user))
     return {"message": "Investment removed"}
 
 # ==================== Export ====================
+
+
 @api_router.get("/export/csv")
 async def export_csv(month: Optional[str] = None, user: dict = Depends(get_current_user)):
     q = {"user_id": user["id"]}
-    if month: q["date"] = month_range_query(month)
+    if month:
+        q["date"] = month_range_query(month)
     txs = await db.transactions.find(q, {"_id": 0}).sort("date", -1).to_list(10000)
     cats = await db.categories.find({}, {"_id": 0}).to_list(100)
     cm = {c["id"]: c["name"] for c in cats}
@@ -931,11 +1099,12 @@ async def export_csv(month: Optional[str] = None, user: dict = Depends(get_curre
     w = csv.writer(out)
     w.writerow(["Tanggal", "Jenis", "Kategori", "Jumlah", "Deskripsi"])
     for t in txs:
-        w.writerow([t["date"], "Pemasukan" if t["type"]=="income" else "Pengeluaran", cm.get(t["category_id"],"Lainnya"), t["amount"], t.get("description","")])
+        w.writerow([t["date"], "Pemasukan" if t["type"] == "income" else "Pengeluaran", cm.get(t["category_id"], "Lainnya"), t["amount"], t.get("description", "")])
     out.seek(0)
     return StreamingResponse(iter([out.getvalue()]), media_type="text/csv", headers={"Content-Disposition": f"attachment; filename=laporan_{month or 'semua'}.csv"})
 
 MAX_EXPORT = int(os.environ.get("MAX_EXPORT_ROWS", "10000"))
+
 
 @api_router.get("/export/backup")
 async def backup(user: dict = Depends(get_current_user)):
@@ -943,27 +1112,70 @@ async def backup(user: dict = Depends(get_current_user)):
     tx_count = await db.transactions.count_documents({"user_id": uid})
     if tx_count > MAX_EXPORT:
         raise HTTPException(400,
-            f"Data terlalu besar untuk diexport sekaligus ({tx_count} transaksi). "
-            f"Gunakan export CSV per bulan."
-        )
+                            f"Data terlalu besar untuk diexport sekaligus ({tx_count} transaksi). "
+                            f"Gunakan export CSV per bulan."
+                            )
     return {
         "transactions": await db.transactions.find({"user_id": uid}, {"_id": 0}).to_list(MAX_EXPORT),
         "categories": await db.categories.find({"$or": [{"is_default": True}, {"user_id": uid}]}, {"_id": 0}).to_list(100),
         "budgets": await db.budgets.find({"user_id": uid}, {"_id": 0}).to_list(100)
     }
 
+TRANSACTION_FIELDS = {"id", "type", "amount", "category_id", "description", "date", "photo_uri", "created_at", "updated_at"}
+BUDGET_FIELDS = {"id", "category_id", "amount", "month", "created_at", "updated_at"}
+
+
+def _sanitize_tx(raw: dict, uid: str) -> Optional[dict]:
+    if not isinstance(raw, dict):
+        return None
+    out = {k: v for k, v in raw.items() if k in TRANSACTION_FIELDS}
+    if out.get("type") not in ("income", "expense"):
+        return None
+    try:
+        out["amount"] = float(out.get("amount", 0))
+    except (TypeError, ValueError):
+        return None
+    if out["amount"] < 0 or out["amount"] > 1e15:
+        return None
+    if not isinstance(out.get("date"), str) or not out.get("category_id"):
+        return None
+    out["id"] = out.get("id") or str(uuid.uuid4())
+    out["user_id"] = uid
+    return out
+
+
+def _sanitize_budget(raw: dict, uid: str) -> Optional[dict]:
+    if not isinstance(raw, dict):
+        return None
+    out = {k: v for k, v in raw.items() if k in BUDGET_FIELDS}
+    try:
+        out["amount"] = float(out.get("amount", 0))
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(out.get("month"), str) or not out.get("category_id"):
+        return None
+    out["id"] = out.get("id") or str(uuid.uuid4())
+    out["user_id"] = uid
+    return out
+
+
 @api_router.post("/import/backup")
 async def import_backup(data: BackupData, user: dict = Depends(get_current_user)):
     uid = user["id"]
+    if len(data.transactions) > MAX_EXPORT or len(data.budgets) > 1000:
+        raise HTTPException(400, "Data terlalu besar untuk diimpor")
     if data.transactions:
-        await db.transactions.delete_many({"user_id": uid})
-        for t in data.transactions: t["user_id"] = uid; t.pop("_id", None)
-        await db.transactions.insert_many(data.transactions)
+        clean_tx = [t for t in (_sanitize_tx(x, uid) for x in data.transactions) if t]
+        if clean_tx:
+            await db.transactions.delete_many({"user_id": uid})
+            await db.transactions.insert_many(clean_tx)
     if data.budgets:
-        await db.budgets.delete_many({"user_id": uid})
-        for b in data.budgets: b["user_id"] = uid; b.pop("_id", None)
-        await db.budgets.insert_many(data.budgets)
+        clean_bg = [b for b in (_sanitize_budget(x, uid) for x in data.budgets) if b]
+        if clean_bg:
+            await db.budgets.delete_many({"user_id": uid})
+            await db.budgets.insert_many(clean_bg)
     return {"message": "Data diimpor"}
+
 
 @api_router.delete("/data/reset")
 async def reset_data(user: dict = Depends(get_current_user)):
@@ -976,19 +1188,17 @@ async def reset_data(user: dict = Depends(get_current_user)):
 
 app.include_router(api_router)
 
-ALLOWED_ORIGINS = os.environ.get("ALLOWED_ORIGINS", "").split(",")
-# Untuk mobile app + dev, tambahkan origins berikut sebagai default fallback:
-DEFAULT_ORIGINS = ["exp://", "http://localhost:8081", "http://localhost:19006"]
-origins = [o.strip() for o in ALLOWED_ORIGINS if o.strip()] or DEFAULT_ORIGINS
+# CORS — mobile app (no Origin header) selalu diperbolehkan, tapi origin HTTP/HTTPS
+# eksplisit dikontrol via env ALLOWED_ORIGINS. Entry yang tidak valid (mis. "exp://"
+# skema tanpa host) tidak lagi diperbolehkan sebagai fallback — lebih aman.
+DEFAULT_DEV_ORIGINS = ["http://localhost:8081", "http://localhost:19006", "http://localhost:19000"]
+_env_origins = [o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "").split(",") if o.strip()]
+origins = _env_origins or DEFAULT_DEV_ORIGINS
 
 app.add_middleware(
-    CORSMiddleware, 
-    allow_credentials=True, 
-    allow_origins=origins, 
-    allow_methods=["GET", "POST", "PUT", "DELETE"], 
-    allow_headers=["Authorization", "Content-Type"]
+    CORSMiddleware,
+    allow_credentials=True,
+    allow_origins=origins,
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_headers=["Authorization", "Content-Type"],
 )
-
-@app.on_event("shutdown")
-async def shutdown():
-    client.close()

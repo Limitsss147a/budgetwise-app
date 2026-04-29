@@ -1,5 +1,5 @@
-import { useState, useCallback, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert, RefreshControl, Animated, Platform } from 'react-native';
+import { useState, useCallback, useEffect, useMemo } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert, RefreshControl, Animated, Platform, TextInput } from 'react-native';
 import Toast from 'react-native-toast-message';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -31,6 +31,7 @@ export default function Transactions() {
   const [month, setMonth] = useState(getCurrentMonth());
   const [loadingMore, setLoadingMore] = useState(false);
   const [showSwipeHint, setShowSwipeHint] = useState(false);
+  const [search, setSearch] = useState('');
 
   const loadData = useCallback(async (p = 1, append = false) => {
     try {
@@ -73,6 +74,19 @@ export default function Transactions() {
 
   const catMap = (id: string) => categories.find(c => c.id === id);
   const filters = [{ key: 'all', label: 'Semua' }, { key: 'income', label: 'Masuk' }, { key: 'expense', label: 'Keluar' }];
+
+  const filteredTransactions = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return transactions;
+    return transactions.filter(tx => {
+      const cat = catMap(tx.category_id);
+      return (
+        (tx.description || '').toLowerCase().includes(q) ||
+        (cat?.name || '').toLowerCase().includes(q) ||
+        String(tx.amount).includes(q)
+      );
+    });
+  }, [transactions, search, categories]);
 
   const renderItem = ({ item: tx }: { item: Transaction }) => {
     const cat = catMap(tx.category_id);
@@ -166,8 +180,27 @@ export default function Transactions() {
             </TouchableOpacity>
           ))}
         </View>
+
+        <View style={[st.searchWrap, { backgroundColor: colors.bgCard + 'CC', borderColor: colors.border }]}>
+          <Ionicons name="search" size={16} color={colors.textTertiary} />
+          <TextInput
+            testID="tx-search-input"
+            style={[st.searchInput, { color: colors.text, fontFamily: fonts.regular }]}
+            placeholder="Cari deskripsi, kategori, nominal..."
+            placeholderTextColor={colors.textTertiary}
+            value={search}
+            onChangeText={setSearch}
+            autoCapitalize="none"
+            returnKeyType="search"
+          />
+          {search.length > 0 && (
+            <TouchableOpacity onPress={() => setSearch('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="close-circle" size={16} color={colors.textTertiary} />
+            </TouchableOpacity>
+          )}
+        </View>
           <FlatList
-            data={transactions}
+            data={filteredTransactions}
             keyExtractor={item => item.id}
             renderItem={renderItem}
             contentContainerStyle={st.list}
@@ -200,6 +233,8 @@ const st = StyleSheet.create({
   filterRow: { flexDirection: 'row', paddingHorizontal: 20, gap: 8, marginBottom: 8 },
   filterPill: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
   filterText: { fontSize: 13 },
+  searchWrap: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 20, marginBottom: 8, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 14, borderWidth: 1, gap: 8 },
+  searchInput: { flex: 1, fontSize: 14, paddingVertical: 0 },
   list: { paddingHorizontal: 20, paddingBottom: 120 },
   txRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1 },
   txIcon: { width: 42, height: 42, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: 12 },

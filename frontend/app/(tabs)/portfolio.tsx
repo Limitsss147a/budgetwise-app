@@ -60,12 +60,14 @@ export default function PortfolioScreen() {
   const [pendingDeleteTicker, setPendingDeleteTicker] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [formError, setFormError] = useState('');
+  const [chartRefreshTrigger, setChartRefreshTrigger] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const loadData = useCallback(async () => {
     try {
       const res = await api.getNetWorth();
       setData(res);
+      setChartRefreshTrigger(prev => prev + 1);
     } catch (e) {
       console.error(e);
     } finally {
@@ -270,7 +272,7 @@ export default function PortfolioScreen() {
 
           {/* Net Worth History Chart */}
           <View style={{ paddingHorizontal: 20 }}>
-            <NetWorthChart colors={colors} theme={theme} />
+            <NetWorthChart colors={colors} theme={theme} refreshTrigger={chartRefreshTrigger} />
           </View>
 
           {(!data?.holdings || data.holdings.length === 0) ? (

@@ -9,7 +9,7 @@ import { formatRupiah } from '../../utils/format';
 import { fonts } from '../../constants/fonts';
 import type { ThemeColors } from '../../constants/colors';
 
-const PERIODS = ['1W', '1M', '3M', '6M', '1Y', 'ALL'] as const;
+const PERIODS = ['1W', '1M', '3M', 'YTD', '1Y', 'ALL'] as const;
 type Period = typeof PERIODS[number];
 
 interface Snapshot {
@@ -25,17 +25,42 @@ interface Props {
   colors: ThemeColors;
   theme: string;
   onDataLoaded?: (hasData: boolean) => void;
+  refreshTrigger?: number;
 }
 
-const CHART_HEIGHT = 180;
-const CHART_PADDING_TOP = 20;
+const CHART_HEIGHT = 220;
+const CHART_PADDING_TOP = 15;
 const CHART_PADDING_BOTTOM = 30;
 const CHART_PADDING_LEFT = 10;
-const CHART_PADDING_RIGHT = 10;
-const LABEL_HEIGHT = 20;
+const CHART_PADDING_RIGHT = 60; // Extra space for Y-axis labels on the right
+const LABEL_HEIGHT = 25;
+const Y_LABEL_COUNT = 5;
 
-export function NetWorthChart({ colors, theme, onDataLoaded }: Props) {
-  const [period, setPeriod] = useState<Period>('1M');
+// Stockbit-style green
+const STOCKBIT_GREEN = '#00D09C';
+
+/**
+ * Format large numbers into compact labels like Stockbit:
+ *   - >= 1,000,000 => "1.26 M"
+ *   - >= 1,000     => "839 K"
+ *   - otherwise    => the number itself
+ */
+function formatCompact(val: number): string {
+  const abs = Math.abs(val);
+  if (abs >= 1_000_000) {
+    const m = val / 1_000_000;
+    // Use at most 2 decimal places, but remove trailing zeros
+    return `${parseFloat(m.toFixed(2))} M`;
+  }
+  if (abs >= 1_000) {
+    const k = val / 1_000;
+    return `${parseFloat(k.toFixed(k >= 100 ? 0 : 1))} K`;
+  }
+  return `${Math.round(val)}`;
+}
+
+export function NetWorthChart({ colors, theme, onDataLoaded, refreshTrigger }: Props) {
+  const [period, setPeriod] = useState<Period>('ALL');
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
@@ -57,7 +82,7 @@ export function NetWorthChart({ colors, theme, onDataLoaded }: Props) {
     }
   }, [onDataLoaded]);
 
-  useEffect(() => { loadHistory(period); }, [period, loadHistory]);
+  useEffect(() => { loadHistory(period); }, [period, loadHistory, refreshTrigger]);
 
   const handlePeriodChange = (p: Period) => {
     if (p !== period) setPeriod(p);
@@ -73,7 +98,7 @@ export function NetWorthChart({ colors, theme, onDataLoaded }: Props) {
   const minVal = values.length ? Math.min(...values) : 0;
   const maxVal = values.length ? Math.max(...values) : 0;
   const range = maxVal - minVal || 1;
-  // Add 10% padding
+  // Add 5% padding
   const yMin = minVal - range * 0.05;
   const yMax = maxVal + range * 0.05;
   const yRange = yMax - yMin || 1;
@@ -84,7 +109,7 @@ export function NetWorthChart({ colors, theme, onDataLoaded }: Props) {
     y: CHART_PADDING_TOP + drawableH - ((s.total_asset_value - yMin) / yRange) * drawableH,
   }));
 
-  // Create smooth bezier path
+  // Create smooth bezier path (Catmull-Rom -> Cubic Bezier)
   const createSmoothPath = () => {
     if (points.length === 0) return '';
     if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
@@ -107,7 +132,7 @@ export function NetWorthChart({ colors, theme, onDataLoaded }: Props) {
     return path;
   };
 
-  // Create area fill path
+  // Create area fill path (line -> bottom-right -> bottom-left -> close)
   const createAreaPath = () => {
     const linePath = createSmoothPath();
     if (!linePath || points.length === 0) return '';
@@ -119,7 +144,6 @@ export function NetWorthChart({ colors, theme, onDataLoaded }: Props) {
   const handleTouch = (evt: GestureResponderEvent) => {
     if (snapshots.length < 2) return;
     const touchX = evt.nativeEvent.locationX;
-    // Find closest point
     let closest = 0;
     let closestDist = Infinity;
     for (let i = 0; i < points.length; i++) {
@@ -132,87 +156,63 @@ export function NetWorthChart({ colors, theme, onDataLoaded }: Props) {
     setSelectedIdx(closest);
   };
 
-  // Determine chart color based on trend
-  const isPositive = snapshots.length >= 2 ?
-    snapshots[snapshots.length - 1].total_asset_value >= snapshots[0].total_asset_value : true;
-  const chartColor = isPositive ? (theme === 'dark' ? '#34D399' : '#10B981') : (theme === 'dark' ? '#F87171' : '#EF4444');
+  // Y-axis tick values (evenly spaced between yMin and yMax)
+  const yTicks: number[] = [];
+  for (let i = 0; i < Y_LABEL_COUNT; i++) {
+    yTicks.push(yMin + (yRange * i) / (Y_LABEL_COUNT - 1));
+  }
 
-  // Change calculations
-  const firstVal = snapshots.length > 0 ? snapshots[0].total_asset_value : 0;
-  const lastVal = snapshots.length > 0 ? snapshots[snapshots.length - 1].total_asset_value : 0;
-  const change = lastVal - firstVal;
-  const changePct = firstVal > 0 ? (change / firstVal * 100) : 0;
-
-  // Selected snapshot info
-  const selectedSnap = selectedIdx !== null ? snapshots[selectedIdx] : null;
-
-  // Date labels (show 3-5 evenly spaced labels)
+  // Date labels (show 3-4 evenly spaced labels along X axis)
   const getDateLabels = () => {
     if (snapshots.length < 2) return [];
-    const count = Math.min(5, snapshots.length);
+    const count = Math.min(4, snapshots.length);
     const step = Math.max(1, Math.floor((snapshots.length - 1) / (count - 1)));
     const labels: { x: number; label: string }[] = [];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
     for (let i = 0; i < snapshots.length; i += step) {
       const d = new Date(snapshots[i].date);
-      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agt', 'Sep', 'Okt', 'Nov', 'Des'];
+      const yr = d.getFullYear().toString().slice(2); // "25"
       labels.push({
         x: points[i].x,
-        label: `${d.getDate()} ${months[d.getMonth()]}`,
+        label: `${d.getDate()} ${months[d.getMonth()]} ${yr}`,
       });
     }
     // Ensure last point is included
     const lastIdx = snapshots.length - 1;
     if (labels.length > 0 && labels[labels.length - 1].x !== points[lastIdx].x) {
       const d = new Date(snapshots[lastIdx].date);
-      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agt', 'Sep', 'Okt', 'Nov', 'Des'];
-      labels.push({ x: points[lastIdx].x, label: `${d.getDate()} ${months[d.getMonth()]}` });
+      const yr = d.getFullYear().toString().slice(2);
+      labels.push({ x: points[lastIdx].x, label: `${d.getDate()} ${months[d.getMonth()]} ${yr}` });
     }
     return labels;
   };
 
   const formatShortDate = (dateStr: string) => {
     const d = new Date(dateStr);
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agt', 'Sep', 'Okt', 'Nov', 'Des'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
     return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
   };
 
+  // Latest value for header display
+  const latestValue = snapshots.length > 0 ? snapshots[snapshots.length - 1].total_asset_value : 0;
+  // Selected snapshot info
+  const selectedSnap = selectedIdx !== null ? snapshots[selectedIdx] : null;
+  const displayValue = selectedSnap ? selectedSnap.total_asset_value : latestValue;
+
   return (
     <View style={[styles.container, { backgroundColor: colors.bgCard, borderColor: colors.border }]}>
-      {/* Header */}
-      <View style={styles.headerRow}>
-        <Text style={[styles.title, { color: colors.text }]}>Grafik Net Worth</Text>
-      </View>
+      {/* Header — Stockbit style: label + big value */}
+      <Text style={[styles.label, { color: colors.textTertiary }]}>Total Equity</Text>
+      <Text style={[styles.bigValue, { color: colors.text }]}>
+        {formatRupiah(displayValue)}
+      </Text>
 
-      {/* Selected snapshot or change summary */}
-      {selectedSnap ? (
-        <View style={styles.tooltipRow}>
-          <Text style={[styles.tooltipDate, { color: colors.textTertiary }]}>
-            {formatShortDate(selectedSnap.date)}
-          </Text>
-          <Text style={[styles.tooltipValue, { color: colors.text }]}>
-            {formatRupiah(selectedSnap.total_asset_value)}
-          </Text>
-          <View style={styles.tooltipDetails}>
-            <Text style={[styles.tooltipDetailText, { color: colors.textTertiary }]}>
-              Likuid: {formatRupiah(selectedSnap.liquid_asset)}
-            </Text>
-            <Text style={[styles.tooltipDetailText, { color: colors.textTertiary }]}>
-              Investasi: {formatRupiah(selectedSnap.total_investment_value)}
-            </Text>
-          </View>
-        </View>
-      ) : snapshots.length >= 2 ? (
-        <View style={styles.changeRow}>
-          <Text style={[styles.changeAmount, { color: chartColor }]}>
-            {change >= 0 ? '+' : ''}{formatRupiah(change)}
-          </Text>
-          <View style={[styles.changeBadge, { backgroundColor: chartColor + '18' }]}>
-            <Text style={[styles.changePercent, { color: chartColor }]}>
-              {changePct >= 0 ? '▲' : '▼'} {Math.abs(changePct).toFixed(2)}%
-            </Text>
-          </View>
-        </View>
-      ) : null}
+      {/* Selected snapshot date hint */}
+      {selectedSnap && (
+        <Text style={[styles.selectedDate, { color: colors.textTertiary }]}>
+          {formatShortDate(selectedSnap.date)}
+        </Text>
+      )}
 
       {/* Chart */}
       <View
@@ -221,7 +221,7 @@ export function NetWorthChart({ colors, theme, onDataLoaded }: Props) {
       >
         {loading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="small" color={colors.brand} />
+            <ActivityIndicator size="small" color={STOCKBIT_GREEN} />
             <Text style={[styles.loadingText, { color: colors.textTertiary }]}>Memuat data...</Text>
           </View>
         ) : snapshots.length === 0 ? (
@@ -249,43 +249,44 @@ export function NetWorthChart({ colors, theme, onDataLoaded }: Props) {
           >
             <Svg width={W} height={CHART_HEIGHT + LABEL_HEIGHT}>
               <Defs>
-                <SvgGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-                  <Stop offset="0%" stopColor={chartColor} stopOpacity={0.25} />
-                  <Stop offset="100%" stopColor={chartColor} stopOpacity={0.0} />
+                <SvgGradient id="stockbitAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                  <Stop offset="0%" stopColor={STOCKBIT_GREEN} stopOpacity={0.35} />
+                  <Stop offset="70%" stopColor={STOCKBIT_GREEN} stopOpacity={0.08} />
+                  <Stop offset="100%" stopColor={STOCKBIT_GREEN} stopOpacity={0.0} />
                 </SvgGradient>
               </Defs>
 
               {/* Area fill */}
-              <Path d={createAreaPath()} fill="url(#areaGrad)" />
+              <Path d={createAreaPath()} fill="url(#stockbitAreaGrad)" />
 
               {/* Line */}
               <Path
                 d={createSmoothPath()}
                 fill="none"
-                stroke={chartColor}
-                strokeWidth={2.5}
+                stroke={STOCKBIT_GREEN}
+                strokeWidth={2}
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
 
-              {/* Endpoint dot */}
-              {points.length > 0 && (
-                <>
-                  <Circle
-                    cx={points[points.length - 1].x}
-                    cy={points[points.length - 1].y}
-                    r={4}
-                    fill={chartColor}
-                  />
-                  <Circle
-                    cx={points[points.length - 1].x}
-                    cy={points[points.length - 1].y}
-                    r={7}
-                    fill={chartColor}
-                    opacity={0.2}
-                  />
-                </>
-              )}
+              {/* Y-axis labels on the right side */}
+              {yTicks.map((tick, i) => {
+                const yPos = CHART_PADDING_TOP + drawableH - ((tick - yMin) / yRange) * drawableH;
+                return (
+                  <SvgText
+                    key={`ytick-${i}`}
+                    x={W - 5}
+                    y={yPos + 4}
+                    fill={colors.textTertiary}
+                    fontSize={10}
+                    fontFamily={fonts.regular}
+                    textAnchor="end"
+                    opacity={0.8}
+                  >
+                    {formatCompact(tick)}
+                  </SvgText>
+                );
+              })}
 
               {/* Crosshair when selected */}
               {selectedIdx !== null && points[selectedIdx] && (
@@ -303,54 +304,59 @@ export function NetWorthChart({ colors, theme, onDataLoaded }: Props) {
                   <Circle
                     cx={points[selectedIdx].x}
                     cy={points[selectedIdx].y}
-                    r={6}
-                    fill={chartColor}
+                    r={5}
+                    fill={STOCKBIT_GREEN}
                     stroke="#FFF"
                     strokeWidth={2}
                   />
                 </>
               )}
 
+              {/* X-axis date labels */}
               {getDateLabels().map((lbl, i) => (
-                <React.Fragment key={i}>
-                  <SvgText
-                    x={lbl.x}
-                    y={CHART_HEIGHT - CHART_PADDING_BOTTOM + 20}
-                    fill={colors.textTertiary}
-                    fontSize={10}
-                    textAnchor="middle"
-                  >
-                    {lbl.label}
-                  </SvgText>
-                </React.Fragment>
+                <SvgText
+                  key={`xlabel-${i}`}
+                  x={lbl.x}
+                  y={CHART_HEIGHT - CHART_PADDING_BOTTOM + 18}
+                  fill={colors.textTertiary}
+                  fontSize={10}
+                  textAnchor="middle"
+                  opacity={0.8}
+                >
+                  {lbl.label}
+                </SvgText>
               ))}
             </Svg>
           </View>
         )}
       </View>
 
-      {/* Period selector */}
+      {/* Period selector — Stockbit style: text only, selected = green with underline */}
       <View style={styles.periodRow}>
-        {PERIODS.map(p => (
-          <TouchableOpacity
-            key={p}
-            testID={`period-${p}`}
-            style={[
-              styles.periodBtn,
-              { backgroundColor: period === p ? chartColor + '18' : 'transparent', borderColor: period === p ? chartColor : 'transparent' },
-            ]}
-            onPress={() => handlePeriodChange(p)}
-          >
-            <Text
-              style={[
-                styles.periodText,
-                { color: period === p ? chartColor : colors.textTertiary, fontFamily: period === p ? fonts.bold : fonts.medium },
-              ]}
+        {PERIODS.map(p => {
+          const isActive = period === p;
+          return (
+            <TouchableOpacity
+              key={p}
+              testID={`period-${p}`}
+              style={styles.periodBtn}
+              onPress={() => handlePeriodChange(p)}
             >
-              {p}
-            </Text>
-          </TouchableOpacity>
-        ))}
+              <Text
+                style={[
+                  styles.periodText,
+                  {
+                    color: isActive ? STOCKBIT_GREEN : colors.textTertiary,
+                    fontFamily: isActive ? fonts.bold : fonts.medium,
+                  },
+                ]}
+              >
+                {p === 'ALL' ? 'All' : p}
+              </Text>
+              {isActive && <View style={[styles.periodUnderline, { backgroundColor: STOCKBIT_GREEN }]} />}
+            </TouchableOpacity>
+          );
+        })}
       </View>
     </View>
   );
@@ -363,59 +369,26 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     marginBottom: 24,
   },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  title: {
-    fontSize: 16,
+  label: {
+    fontSize: 13,
     fontFamily: fonts.semiBold,
+    marginBottom: 4,
+    letterSpacing: 0.3,
   },
-  changeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 16,
-  },
-  changeAmount: {
-    fontSize: 15,
-    fontFamily: fonts.semiBold,
-  },
-  changeBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-  },
-  changePercent: {
-    fontSize: 12,
-    fontFamily: fonts.semiBold,
-  },
-  tooltipRow: {
-    marginBottom: 12,
-  },
-  tooltipDate: {
-    fontSize: 12,
-    fontFamily: fonts.regular,
-    marginBottom: 2,
-  },
-  tooltipValue: {
-    fontSize: 20,
+  bigValue: {
+    fontSize: 28,
     fontFamily: fonts.bold,
     marginBottom: 4,
   },
-  tooltipDetails: {
-    flexDirection: 'row',
-    gap: 16,
-  },
-  tooltipDetailText: {
-    fontSize: 11,
+  selectedDate: {
+    fontSize: 12,
     fontFamily: fonts.regular,
+    marginBottom: 8,
   },
   chartContainer: {
     minHeight: CHART_HEIGHT + LABEL_HEIGHT,
     justifyContent: 'center',
+    marginTop: 8,
   },
   loadingContainer: {
     height: CHART_HEIGHT,
@@ -446,18 +419,22 @@ const styles = StyleSheet.create({
   },
   periodRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 16,
-    gap: 6,
+    justifyContent: 'space-around',
+    marginTop: 12,
+    paddingTop: 8,
   },
   periodBtn: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: 10,
     alignItems: 'center',
-    borderWidth: 1,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
   },
   periodText: {
-    fontSize: 13,
+    fontSize: 14,
+  },
+  periodUnderline: {
+    height: 2,
+    width: '100%',
+    borderRadius: 1,
+    marginTop: 4,
   },
 });

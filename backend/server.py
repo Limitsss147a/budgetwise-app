@@ -316,7 +316,15 @@ async def lifespan(app: FastAPI):
         await _init_app_state()
     except Exception as e:
         logger.exception("App init failed: %s", e)
+    # Start the daily snapshot scheduler as a background task
+    scheduler_task = asyncio.create_task(_daily_snapshot_scheduler())
     yield
+    # Cleanup: cancel the scheduler and close the DB connection
+    scheduler_task.cancel()
+    try:
+        await scheduler_task
+    except asyncio.CancelledError:
+        pass
     try:
         client.close()
     except Exception:
@@ -1112,31 +1120,12 @@ async def delete_investment(ticker: str, user: dict = Depends(get_current_user))
 
 PERIOD_DAYS = {"1W": 7, "1M": 30, "3M": 90, "6M": 180, "1Y": 365}
 
-
-@api_router.get("/portfolio/net-worth/history")
-async def get_net_worth_history(
-    period: str = Query("1M", regex="^(1W|1M|3M|6M|1Y|ALL)$"),
-    user: dict = Depends(get_current_user),
-):
-    uid = user["id"]
-    q: dict = {"user_id": uid}
-    if period != "ALL":
-        days = PERIOD_DAYS[period]
-        start = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
-        q["date"] = {"$gte": start}
-    snapshots = (
-        await db.net_worth_snapshots.find(q, {"_id": 0, "user_id": 0})
-        .sort("date", 1)
-        .to_list(1000)
-    )
-    return {"period": period, "snapshots": snapshots}
+# ---------- Shared snapshot helper ----------
 
 
-@api_router.post("/portfolio/net-worth/snapshot")
-async def record_net_worth_snapshot(user: dict = Depends(get_current_user)):
-    """Manually trigger a net worth snapshot for today."""
-    uid = user["id"]
-    # Calculate current net worth
+async def _compute_user_snapshot(uid: str) -> dict:
+    """Calculate and upsert today's net worth snapshot for a single user.
+    Returns the snapshot dict (without _id)."""
     pipe = [{"$match": {"user_id": uid}}, {"$group": {"_id": "$type", "total": {"$sum": "$amount"}}}]
     res = await db.transactions.aggregate(pipe).to_list(10)
     inc = sum(r["total"] for r in res if r["_id"] == "income")
@@ -1145,7 +1134,10 @@ async def record_net_worth_snapshot(user: dict = Depends(get_current_user)):
 
     investments = await db.investments.find({"user_id": uid}, {"_id": 0}).to_list(100)
     tickers = [inv["ticker"] for inv in investments]
-    prices_list = await db.market_prices.find({"ticker": {"$in": tickers}}, {"_id": 0}).to_list(len(tickers)) if tickers else []
+    prices_list = (
+        await db.market_prices.find({"ticker": {"$in": tickers}}, {"_id": 0}).to_list(len(tickers))
+        if tickers else []
+    )
     price_map = {p["ticker"]: p for p in prices_list}
 
     total_inv = 0
@@ -1174,7 +1166,90 @@ async def record_net_worth_snapshot(user: dict = Depends(get_current_user)):
     await db.net_worth_snapshots.update_one(
         {"user_id": uid, "date": today_str}, {"$set": snap}, upsert=True
     )
-    return {"message": "Snapshot recorded", "snapshot": {k: v for k, v in snap.items() if k != "_id"}}
+    return {k: v for k, v in snap.items() if k != "_id"}
+
+
+# ---------- Daily auto-snapshot scheduler ----------
+
+# Target time: 00:05 WIB = 17:05 UTC (previous day)
+SNAPSHOT_HOUR_UTC = int(os.environ.get("SNAPSHOT_HOUR_UTC", "17"))
+SNAPSHOT_MINUTE_UTC = int(os.environ.get("SNAPSHOT_MINUTE_UTC", "5"))
+
+
+async def _daily_snapshot_scheduler():
+    """Background loop that records net worth snapshots for all users once per day."""
+    logger.info(f"📅 Daily snapshot scheduler started (target {SNAPSHOT_HOUR_UTC:02d}:{SNAPSHOT_MINUTE_UTC:02d} UTC)")
+    while True:
+        try:
+            now = datetime.now(timezone.utc)
+            # Calculate next run time
+            target_today = now.replace(hour=SNAPSHOT_HOUR_UTC, minute=SNAPSHOT_MINUTE_UTC, second=0, microsecond=0)
+            if now >= target_today:
+                # Already past today's target — schedule for tomorrow
+                target = target_today + timedelta(days=1)
+            else:
+                target = target_today
+
+            wait_seconds = (target - now).total_seconds()
+            logger.info(f"📅 Next snapshot run in {wait_seconds:.0f}s ({target.isoformat()})")
+            await asyncio.sleep(wait_seconds)
+
+            # --- Run daily snapshots ---
+            logger.info("📸 Starting daily net worth snapshots for all users...")
+            # Find all users that have at least one investment
+            user_ids_with_investments = await db.investments.distinct("user_id")
+            # Also include users that have transactions (they have liquid assets)
+            user_ids_with_transactions = await db.transactions.distinct("user_id")
+            all_user_ids = list(set(user_ids_with_investments) | set(user_ids_with_transactions))
+
+            success_count = 0
+            error_count = 0
+            for uid in all_user_ids:
+                try:
+                    await _compute_user_snapshot(uid)
+                    success_count += 1
+                except Exception as e:
+                    error_count += 1
+                    logger.warning(f"Snapshot failed for user {uid}: {e}")
+
+            logger.info(f"📸 Daily snapshots complete: {success_count} ok, {error_count} errors")
+
+        except asyncio.CancelledError:
+            logger.info("📅 Snapshot scheduler cancelled")
+            break
+        except Exception as e:
+            logger.exception(f"📅 Snapshot scheduler error: {e}")
+            # Sleep a bit before retrying to avoid a tight error loop
+            await asyncio.sleep(60)
+
+
+@api_router.get("/portfolio/net-worth/history")
+async def get_net_worth_history(
+    period: str = Query("1M", regex="^(1W|1M|3M|YTD|6M|1Y|ALL)$"),
+    user: dict = Depends(get_current_user),
+):
+    uid = user["id"]
+    q: dict = {"user_id": uid}
+    if period == "YTD":
+        start = datetime.now(timezone.utc).strftime("%Y-01-01")
+        q["date"] = {"$gte": start}
+    elif period != "ALL":
+        days = PERIOD_DAYS[period]
+        start = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
+        q["date"] = {"$gte": start}
+    snapshots = (
+        await db.net_worth_snapshots.find(q, {"_id": 0, "user_id": 0})
+        .sort("date", 1)
+        .to_list(1000)
+    )
+    return {"period": period, "snapshots": snapshots}
+
+
+@api_router.post("/portfolio/net-worth/snapshot")
+async def record_net_worth_snapshot(user: dict = Depends(get_current_user)):
+    """Manually trigger a net worth snapshot for today."""
+    snap = await _compute_user_snapshot(user["id"])
+    return {"message": "Snapshot recorded", "snapshot": snap}
 
 
 # ==================== Export ====================

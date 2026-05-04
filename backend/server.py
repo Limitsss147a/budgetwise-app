@@ -807,6 +807,26 @@ async def fetch_google_finance_price(ticker: str) -> Optional[float]:
     return None
 
 
+async def fetch_yahoo_v8_price(ticker: str) -> Optional[float]:
+    """Fallback using Yahoo Finance v8 chart API which is less prone to 429 errors."""
+    try:
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}"
+        headers = {
+            "User-Agent": random.choice(USER_AGENTS),
+            "Accept": "application/json"
+        }
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(url, headers=headers)
+            if resp.status_code == 200:
+                data = resp.json()
+                price = data.get("chart", {}).get("result", [{}])[0].get("meta", {}).get("regularMarketPrice")
+                if price is not None:
+                    return float(price)
+    except Exception as e:
+        logger.warning(f"Yahoo v8 scrape failed for {ticker}: {e}")
+    return None
+
+
 async def fetch_stock_price(ticker: str) -> Optional[dict]:
     y_ticker = ticker if '.JK' in ticker else f"{ticker}.JK"
     result = {"price": None, "pbv": 0.0, "roe": 0.0, "der": 0.0}
@@ -843,7 +863,13 @@ async def fetch_stock_price(ticker: str) -> Optional[dict]:
             except Exception as e:
                 logger.warning(f"yfinance failed for {ticker}: {e}")
 
-            # Strategy 2: Google Finance fallback
+            # Strategy 2: Yahoo v8 chart API (Fast & highly reliable fallback)
+            y8_price = await fetch_yahoo_v8_price(y_ticker)
+            if y8_price:
+                result["price"] = y8_price
+                return result
+
+            # Strategy 3: Google Finance fallback
             g_price = await fetch_google_finance_price(y_ticker)
             if g_price:
                 result["price"] = g_price

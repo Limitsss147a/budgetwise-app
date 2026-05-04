@@ -25,5 +25,5 @@ jobs:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           pip install -U "huggingface_hub[cli]"
-          # Gunakan huggingface-cli upload untuk menghindari masalah Git Authentication
-          huggingface-cli upload mit147a/budgetwise-api ./hf-deploy . --repo-type space --token $HF_TOKEN --commit-message "Auto-deploy: sync backend to Hugging Face"
+          # Gunakan hf upload (pengganti huggingface-cli) untuk menghindari masalah Git Authentication
+          hf upload mit147a/budgetwise-api ./hf-deploy . --repo-type space --token $HF_TOKEN --commit-message "Auto-deploy: sync backend to Hugging Face"

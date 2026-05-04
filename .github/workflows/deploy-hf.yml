@@ -1,0 +1,39 @@
+name: Deploy to Hugging Face Spaces
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/**'
+      - 'hf-deploy/**'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Sync Backend Files to hf-deploy
+        run: |
+          cp backend/server.py hf-deploy/
+          cp backend/requirements.txt hf-deploy/
+
+      - name: Push to Hugging Face
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          cd hf-deploy
+          # Hapus .git lokal (jika ada) agar kita bisa push sebagai repo independen ke HF
+          rm -rf .git
+          
+          git init
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+          
+          git add .
+          git commit -m "Auto-deploy: sync backend to Hugging Face"
+          
+          # Force push ke Hugging Face (menggantikan history yang ada di HF dengan yang baru)
+          git push --force https://mit147a:$HF_TOKEN@huggingface.co/spaces/mit147a/budgetwise-api master:main

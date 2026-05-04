@@ -1036,7 +1036,7 @@ async def get_net_worth(user: dict = Depends(get_current_user)):
     snap_doc = {
         "user_id": uid,
         "date": today_str,
-        "total_asset_value": liquid_asset + total_investment_value,
+        "total_asset_value": total_asset_value,
         "liquid_asset": liquid_asset,
         "total_investment_value": total_investment_value,
         "total_unrealized_pl": total_unrealized_pl,
@@ -1053,7 +1053,7 @@ async def get_net_worth(user: dict = Depends(get_current_user)):
     return {
         "liquid_asset": liquid_asset,
         "total_investment_value": total_investment_value,
-        "total_asset_value": liquid_asset + total_investment_value,
+        "total_asset_value": total_asset_value,
         "total_unrealized_pl": total_unrealized_pl,
         "total_unrealized_pl_percentage": total_pl_pct,
         "holdings": holdings

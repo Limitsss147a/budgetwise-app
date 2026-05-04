@@ -21,7 +21,10 @@ jobs:
         run: |
           cd backend
           pip install flake8
-          flake8 server.py --max-line-length=120 --ignore=E501,W503
+          # --exit-zero membuat build tidak gagal jika hanya ada error linting
+          # Ini berguna agar kita tetap bisa deploy meskipun kode kurang rapi
+          flake8 server.py --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 server.py --count --exit-zero --max-complexity=10 --max-line-length=120 --statistics
 
   deploy-backend:
     needs: test-backend

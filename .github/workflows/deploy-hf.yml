@@ -28,12 +28,12 @@ jobs:
           # Hapus .git lokal (jika ada) agar kita bisa push sebagai repo independen ke HF
           rm -rf .git
           
-          git init
+          git init -b main
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
           
           git add .
           git commit -m "Auto-deploy: sync backend to Hugging Face"
           
-          # Gunakan format token sebagai password untuk menghindari error autentikasi
-          git push --force https://mit147a:${{ secrets.HF_TOKEN }}@huggingface.co/spaces/mit147a/budgetwise-api master:main
+          # Gunakan branch main:main agar sinkron
+          git push --force https://mit147a:${{ secrets.HF_TOKEN }}@huggingface.co/spaces/mit147a/budgetwise-api main:main

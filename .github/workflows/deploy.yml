@@ -22,18 +22,5 @@ jobs:
           cd backend
           pip install flake8
           # --exit-zero membuat build tidak gagal jika hanya ada error linting
-          # Ini berguna agar kita tetap bisa deploy meskipun kode kurang rapi
           flake8 server.py --count --select=E9,F63,F7,F82 --show-source --statistics
           flake8 server.py --count --exit-zero --max-complexity=10 --max-line-length=120 --statistics
-
-  deploy-backend:
-    needs: test-backend
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    steps:
-      - uses: actions/checkout@v4
-      - name: Deploy to Railway
-        uses: bervProject/railway-deploy@main
-        with:
-          railway_token: ${{ secrets.RAILWAY_TOKEN }}
-          service: budgetwise-backend

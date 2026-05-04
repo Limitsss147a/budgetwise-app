@@ -24,16 +24,6 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          cd hf-deploy
-          # Hapus .git lokal (jika ada) agar kita bisa push sebagai repo independen ke HF
-          rm -rf .git
-          
-          git init -b main
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git config --global user.name "github-actions[bot]"
-          
-          git add .
-          git commit -m "Auto-deploy: sync backend to Hugging Face"
-          
-          # Gunakan branch main:main agar sinkron
-          git push --force https://mit147a:${{ secrets.HF_TOKEN }}@huggingface.co/spaces/mit147a/budgetwise-api main:main
+          pip install -U "huggingface_hub[cli]"
+          # Gunakan huggingface-cli upload untuk menghindari masalah Git Authentication
+          huggingface-cli upload mit147a/budgetwise-api ./hf-deploy . --repo-type space --token $HF_TOKEN --commit-message "Auto-deploy: sync backend to Hugging Face"

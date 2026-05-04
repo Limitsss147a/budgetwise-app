@@ -833,74 +833,75 @@ async def fetch_stock_price(ticker: str) -> Optional[dict]:
 
     def _get_yf():
         session = requests.Session()
-        ua = random.choice(USER_AGENTS)
-        session.headers.update({"User-Agent": ua})
+        session.headers.update({"User-Agent": random.choice(USER_AGENTS)})
         stock = yf.Ticker(y_ticker, session=session)
-        fast = stock.fast_info
-        price = fast.get("last_price") or fast.get("regular_market_previous_close")
+        # Use stock.info directly (proven reliable, same as PDSD project)
         info = stock.info
-        pbv = info.get("priceToBook", 0.0)
-        roe = info.get("returnOnEquity", 0.0)
-        der = info.get("debtToEquity", 0.0)
-        if not price:
-            price = info.get("currentPrice") or info.get("regularMarketPrice")
+        # Price priority: same approach as the working PDSD scraper
+        price = (
+            info.get("currentPrice")
+            or info.get("regularMarketPrice")
+            or info.get("previousClose")
+        )
         return {
             "price": float(price) if price and price > 0 else None,
-            "pbv": float(pbv) if pbv else 0.0,
-            "roe": float(roe) if roe else 0.0,
-            "der": float(der) if der else 0.0
+            "pbv": float(info.get("priceToBook") or 0),
+            "roe": float(info.get("returnOnEquity") or 0),
+            "der": float(info.get("debtToEquity") or 0),
         }
 
-    # Beri total timeout 15 detik per ticker
+    # Strategy 1: yfinance stock.info (30s timeout)
     try:
-        async with asyncio.timeout(15):
-            # Strategy 1: yfinance
-            try:
-                yf_data = await asyncio.to_thread(_get_yf)
-                if yf_data and yf_data["price"]:
-                    result.update(yf_data)
-                    return result
-            except Exception as e:
-                logger.warning(f"yfinance failed for {ticker}: {e}")
-
-            # Strategy 2: Yahoo v8 chart API (Fast & highly reliable fallback)
-            y8_price = await fetch_yahoo_v8_price(y_ticker)
-            if y8_price:
-                result["price"] = y8_price
-                return result
-
-            # Strategy 3: Google Finance fallback
-            g_price = await fetch_google_finance_price(y_ticker)
-            if g_price:
-                result["price"] = g_price
-                return result
-
+        yf_data = await asyncio.wait_for(asyncio.to_thread(_get_yf), timeout=30)
+        if yf_data and yf_data["price"]:
+            result.update(yf_data)
+            return result
     except asyncio.TimeoutError:
-        logger.error(f"Timeout fetching price for {ticker} (>15s)")
-        return None
+        logger.warning(f"yfinance timeout for {ticker} (>30s)")
+    except Exception as e:
+        logger.warning(f"yfinance failed for {ticker}: {e}")
+
+    # Strategy 2: Yahoo v8 chart API (fast fallback for price only)
+    try:
+        y8_price = await fetch_yahoo_v8_price(y_ticker)
+        if y8_price:
+            result["price"] = y8_price
+            return result
+    except Exception as e:
+        logger.warning(f"Yahoo v8 fallback failed for {ticker}: {e}")
+
+    # Strategy 3: Google Finance fallback
+    try:
+        g_price = await fetch_google_finance_price(y_ticker)
+        if g_price:
+            result["price"] = g_price
+            return result
+    except Exception as e:
+        logger.warning(f"Google Finance fallback failed for {ticker}: {e}")
 
     logger.error(f"All price sources failed for {ticker}")
     return None
 
 
 async def _do_update_prices(uid: str):
-    """Background worker — jalankan setelah response dikirim."""
+    """Background worker — fetch prices sequentially to avoid rate limiting."""
     investments = await db.investments.find({"user_id": uid}, {"_id": 0}).to_list(100)
-    tickers = [inv["ticker"] for inv in investments]
-    if not tickers:
+    if not investments:
         return
-    results = await asyncio.gather(
-        *[fetch_stock_price(t) for t in tickers],
-        return_exceptions=True
-    )
-    for ticker, data in zip(tickers, results):
-        if isinstance(data, Exception) or not data:
+    for inv in investments:
+        ticker = inv["ticker"]
+        try:
+            data = await fetch_stock_price(ticker)
+            if data and isinstance(data, dict) and data.get("price"):
+                await db.market_prices.update_one(
+                    {"ticker": ticker},
+                    {"$set": {**data, "updated_at": datetime.now(timezone.utc).isoformat()}},
+                    upsert=True
+                )
+            await asyncio.sleep(0.5)  # Delay between tickers to avoid rate limiting
+        except Exception as e:
+            logger.warning(f"Price update failed for {ticker}: {e}")
             continue
-        await db.market_prices.update_one(
-            {"ticker": ticker},
-            {"$set": {**data, "updated_at": datetime.now(timezone.utc).isoformat()}},
-            upsert=True
-        )
 
 
 @api_router.post("/portfolio/update-prices")
@@ -979,10 +980,11 @@ async def get_net_worth(user: dict = Depends(get_current_user)):
 
     if stale_tickers:
         logger.info(f"Auto-refreshing {len(stale_tickers)} stale tickers: {stale_tickers}")
-        fresh_results = await asyncio.gather(*[_refresh_ticker_price(t) for t in stale_tickers])
-        for doc in fresh_results:
+        for st_ticker in stale_tickers:
+            doc = await _refresh_ticker_price(st_ticker)
             if doc:
                 price_map[doc["ticker"]] = doc
+            await asyncio.sleep(0.5)  # Delay between tickers to avoid rate limiting
 
     # 4. Build holdings with fresh data
     total_investment_value = 0

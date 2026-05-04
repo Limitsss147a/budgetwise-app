@@ -235,6 +235,14 @@ async def _init_app_state():
     )
 
     # Market prices cleanup otomatis setelah 24 jam
+    # Drop old TTL index if it exists (it was on string values and never worked)
+    try:
+        await db.market_prices.drop_index("ttl_market_prices")
+        # Also clear stale data that had ISO string updated_at (TTL never fired)
+        await db.market_prices.delete_many({"updated_at": {"$type": "string"}})
+        logger.info("Dropped old TTL index and cleared stale string-format market prices")
+    except Exception:
+        pass  # Index doesn't exist yet, that's fine
     await db.market_prices.create_index(
         "updated_at",
         expireAfterSeconds=86400,
@@ -895,7 +903,7 @@ async def _do_update_prices(uid: str):
             if data and isinstance(data, dict) and data.get("price"):
                 await db.market_prices.update_one(
                     {"ticker": ticker},
-                    {"$set": {**data, "updated_at": datetime.now(timezone.utc).isoformat()}},
+                    {"$set": {**data, "updated_at": datetime.now(timezone.utc)}},
                     upsert=True
                 )
             await asyncio.sleep(0.5)  # Delay between tickers to avoid rate limiting
@@ -912,7 +920,7 @@ async def update_market_prices(
     background_tasks.add_task(_do_update_prices, user["id"])
     return {"message": "Price update dimulai di background"}
 
-PRICE_STALE_SECONDS = 300  # 5 minutes
+PRICE_STALE_SECONDS = 120  # 2 minutes — fresher prices during market hours
 
 
 async def _refresh_ticker_price(ticker: str):
@@ -926,7 +934,7 @@ async def _refresh_ticker_price(ticker: str):
                 "pbv": data.get("pbv", 0.0),
                 "roe": data.get("roe", 0.0),
                 "der": data.get("der", 0.0),
-                "updated_at": datetime.now(timezone.utc).isoformat()
+                "updated_at": datetime.now(timezone.utc)
             }
             await db.market_prices.update_one({"ticker": ticker}, {"$set": doc}, upsert=True)
             return doc
@@ -963,7 +971,7 @@ async def get_net_worth(user: dict = Depends(get_current_user)):
     prices_list = await db.market_prices.find({"ticker": {"$in": tickers}}, {"_id": 0}).to_list(len(tickers))
     price_map = {p["ticker"]: p for p in prices_list}
 
-    # 3. Auto-refresh stale prices (older than 5 minutes)
+    # 3. Auto-refresh stale prices (older than 2 minutes)
     now = datetime.now(timezone.utc)
     stale_tickers = []
     for ticker_ in tickers:
@@ -972,7 +980,12 @@ async def get_net_worth(user: dict = Depends(get_current_user)):
             stale_tickers.append(ticker_)
         else:
             try:
-                updated_at = datetime.fromisoformat(market_data["updated_at"].replace("Z", "+00:00"))
+                raw_updated = market_data["updated_at"]
+                # Handle both datetime objects (new) and ISO strings (legacy)
+                if isinstance(raw_updated, str):
+                    updated_at = datetime.fromisoformat(raw_updated.replace("Z", "+00:00"))
+                else:
+                    updated_at = raw_updated if raw_updated.tzinfo else raw_updated.replace(tzinfo=timezone.utc)
                 if (now - updated_at).total_seconds() > PRICE_STALE_SECONDS:
                     stale_tickers.append(ticker_)
             except Exception:
@@ -1043,7 +1056,7 @@ async def get_net_worth(user: dict = Depends(get_current_user)):
         "total_investment_value": total_investment_value,
         "total_unrealized_pl": total_unrealized_pl,
         "total_unrealized_pl_percentage": total_pl_pct,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc),
     }
     if existing_snap:
         await db.net_worth_snapshots.update_one(
@@ -1106,7 +1119,7 @@ async def add_investment(data: InvestmentCreate, user: dict = Depends(get_curren
             "pbv": price_data.get("pbv", 0.0),
             "roe": price_data.get("roe", 0.0),
             "der": price_data.get("der", 0.0),
-            "updated_at": datetime.now(timezone.utc).isoformat()
+            "updated_at": datetime.now(timezone.utc)
         }
         await db.market_prices.update_one({"ticker": ticker}, {"$set": doc}, upsert=True)
 

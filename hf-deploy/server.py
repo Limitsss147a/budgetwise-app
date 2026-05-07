@@ -767,47 +767,48 @@ SCREAPER_HEADERS = {
 }
 
 
-async def fetch_google_finance_price(ticker: str) -> Optional[float]:
+async def fetch_google_finance_price(ticker: str) -> float | None:
     """Scrape price from Google Finance (High reliability for IDX)."""
     try:
-        # BBCA.JK -> BBCA:IDX
         symbol = ticker.split('.')[0]
         url = f"https://www.google.com/finance/quote/{symbol}:IDX"
 
+        # PERBAIKAN: rotasi User-Agent, bukan header statis
+        headers = {
+            "User-Agent": random.choice(USER_AGENTS),
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Cache-Control": "no-cache",
+        }
+
         async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
-            resp = await client.get(url, headers=SCREAPER_HEADERS)
+            resp = await client.get(url, headers=headers)
             if resp.status_code != 200:
                 return None
 
             import re
-            # <div class="YMlKec fxKbKc">Rp 6,575.00</div>
             match = re.search(r'class="YMlKec fxKbKc">([^<]+)</div>', resp.text)
             if match:
                 price_str = match.group(1)
-                # Clean price string: Rp 6,575.00 or Rp 6.575,00
-                # 1. Remove non-numeric except , and .
                 cleaned = re.sub(r'[^\d.,]', '', price_str)
-                # 2. Heuristic: if both . and , exist, the last one is decimal.
-                # If only one exists, and it's 3 digits from right, it's thousands.
-                # If 2 digits from right, it's decimal.
                 if '.' in cleaned and ',' in cleaned:
                     dot_idx = cleaned.rfind('.')
                     comma_idx = cleaned.rfind(',')
-                    if dot_idx > comma_idx:  # Dot is decimal
+                    if dot_idx > comma_idx:
                         return float(cleaned.replace(',', ''))
-                    else:  # Comma is decimal
+                    else:
                         return float(cleaned.replace('.', '').replace(',', '.'))
                 elif '.' in cleaned:
                     parts = cleaned.split('.')
-                    if len(parts[-1]) == 2:  # Decimal
+                    if len(parts[-1]) == 2:
                         return float(cleaned)
-                    else:  # Thousands
+                    else:
                         return float(cleaned.replace('.', ''))
                 elif ',' in cleaned:
                     parts = cleaned.split(',')
-                    if len(parts[-1]) == 2:  # Decimal
+                    if len(parts[-1]) == 2:
                         return float(cleaned.replace(',', '.'))
-                    else:  # Thousands
+                    else:
                         return float(cleaned.replace(',', ''))
                 return float(cleaned) if cleaned else None
     except Exception as e:
@@ -835,57 +836,83 @@ async def fetch_yahoo_v8_price(ticker: str) -> Optional[float]:
     return None
 
 
-async def fetch_stock_price(ticker: str) -> Optional[dict]:
+async def fetch_stock_price(ticker: str) -> dict | None:
+    """
+    Ambil harga saham dan fundamental.
+
+    Strategi baru (lebih cepat & reliabel):
+      1. Yahoo v8 API → harga saja, cepat (~1-2s)
+      2. Google Finance → harga saja, fallback
+      3. yfinance .info → HANYA jika perlu fundamental (PBV/ROE/DER), timeout dikurangi 15s
+    """
     y_ticker = ticker if '.JK' in ticker else f"{ticker}.JK"
     result = {"price": None, "pbv": 0.0, "roe": 0.0, "der": 0.0}
 
-    def _get_yf():
-        session = requests.Session()
-        session.headers.update({"User-Agent": random.choice(USER_AGENTS)})
-        stock = yf.Ticker(y_ticker, session=session)
-        # Use stock.info directly (proven reliable, same as PDSD project)
-        info = stock.info
-        # Price priority: same approach as the working PDSD scraper
-        price = (
-            info.get("currentPrice")
-            or info.get("regularMarketPrice")
-            or info.get("previousClose")
-        )
-        return {
-            "price": float(price) if price and price > 0 else None,
-            "pbv": float(info.get("priceToBook") or 0),
-            "roe": float(info.get("returnOnEquity") or 0),
-            "der": float(info.get("debtToEquity") or 0),
-        }
-
-    # Strategy 1: yfinance stock.info (30s timeout)
-    try:
-        yf_data = await asyncio.wait_for(asyncio.to_thread(_get_yf), timeout=30)
-        if yf_data and yf_data["price"]:
-            result.update(yf_data)
-            return result
-    except asyncio.TimeoutError:
-        logger.warning(f"yfinance timeout for {ticker} (>30s)")
-    except Exception as e:
-        logger.warning(f"yfinance failed for {ticker}: {e}")
-
-    # Strategy 2: Yahoo v8 chart API (fast fallback for price only)
+    # Strategi 1: Yahoo Finance v8 (cepat, ~1-2s, jarang rate-limited)
     try:
         y8_price = await fetch_yahoo_v8_price(y_ticker)
-        if y8_price:
+        if y8_price and y8_price > 0:
             result["price"] = y8_price
+            # Harga sudah didapat — ambil fundamental via yfinance secara paralel
+            # dengan timeout pendek (15s) agar tidak block terlalu lama
+            try:
+                def _get_fundamentals():
+                    session = requests.Session()
+                    session.headers.update({"User-Agent": random.choice(USER_AGENTS)})
+                    stock = yf.Ticker(y_ticker, session=session)
+                    info = stock.info
+                    return {
+                        "pbv": float(info.get("priceToBook") or 0),
+                        "roe": float(info.get("returnOnEquity") or 0),
+                        "der": float(info.get("debtToEquity") or 0),
+                    }
+                fundamentals = await asyncio.wait_for(
+                    asyncio.to_thread(_get_fundamentals),
+                    timeout=15  # lebih pendek dari sebelumnya (30s)
+                )
+                result.update(fundamentals)
+            except Exception as e:
+                logger.debug(f"Fundamentals fetch skipped for {ticker}: {e}")
+                # Harga sudah ada — fundamental gagal tidak masalah
             return result
     except Exception as e:
-        logger.warning(f"Yahoo v8 fallback failed for {ticker}: {e}")
+        logger.warning(f"Yahoo v8 failed for {ticker}: {e}")
 
-    # Strategy 3: Google Finance fallback
+    # Strategi 2: Google Finance (fallback harga)
     try:
         g_price = await fetch_google_finance_price(y_ticker)
-        if g_price:
+        if g_price and g_price > 0:
             result["price"] = g_price
             return result
     except Exception as e:
         logger.warning(f"Google Finance fallback failed for {ticker}: {e}")
+
+    # Strategi 3: yfinance .info sebagai last resort (timeout 15s)
+    try:
+        def _get_yf():
+            session = requests.Session()
+            session.headers.update({"User-Agent": random.choice(USER_AGENTS)})
+            stock = yf.Ticker(y_ticker, session=session)
+            info = stock.info
+            price = (
+                info.get("currentPrice")
+                or info.get("regularMarketPrice")
+                or info.get("previousClose")
+            )
+            return {
+                "price": float(price) if price and price > 0 else None,
+                "pbv": float(info.get("priceToBook") or 0),
+                "roe": float(info.get("returnOnEquity") or 0),
+                "der": float(info.get("debtToEquity") or 0),
+            }
+        yf_data = await asyncio.wait_for(asyncio.to_thread(_get_yf), timeout=15)  # dikurangi dari 30s
+        if yf_data and yf_data["price"]:
+            result.update(yf_data)
+            return result
+    except asyncio.TimeoutError:
+        logger.warning(f"yfinance timeout for {ticker} (>15s)")
+    except Exception as e:
+        logger.warning(f"yfinance failed for {ticker}: {e}")
 
     logger.error(f"All price sources failed for {ticker}")
     return None
@@ -920,41 +947,74 @@ async def update_market_prices(
     background_tasks.add_task(_do_update_prices, user["id"])
     return {"message": "Price update dimulai di background"}
 
-PRICE_STALE_SECONDS = 120  # 2 minutes — fresher prices during market hours
+PRICE_STALE_SECONDS = 600  # 10 menit — cukup untuk IDX; pasar update setiap beberapa menit
+# Jika ingin lebih agresif saat jam bursa bisa turunkan ke 300, tapi 120 terlalu pendek.
+
+_price_refresh_locks: dict = {}  # user_id → asyncio.Lock
 
 
-async def _refresh_ticker_price(ticker: str):
-    """Fetch fresh price for a single ticker and update db.market_prices."""
-    try:
-        data = await fetch_stock_price(ticker)
-        if data and isinstance(data, dict) and data.get("price"):
-            doc = {
-                "ticker": ticker,
-                "price": data.get("price", 0.0),
-                "pbv": data.get("pbv", 0.0),
-                "roe": data.get("roe", 0.0),
-                "der": data.get("der", 0.0),
-                "updated_at": datetime.now(timezone.utc)
-            }
-            await db.market_prices.update_one({"ticker": ticker}, {"$set": doc}, upsert=True)
-            return doc
-    except Exception as e:
-        logger.warning(f"Auto-refresh failed for {ticker}: {e}")
-    return None
+async def _background_refresh_stale(uid: str, stale_tickers: list[str]):
+    """
+    Background worker: refresh stale tickers TANPA memblokir HTTP response.
+    Dilindungi lock per-user agar tidak ada concurrent refresh.
+    """
+    # Ambil atau buat lock untuk user ini
+    if uid not in _price_refresh_locks:
+        _price_refresh_locks[uid] = asyncio.Lock()
+    lock = _price_refresh_locks[uid]
+
+    if lock.locked():
+        # Sudah ada refresh berjalan untuk user ini — skip
+        logger.info(f"Refresh already in progress for user {uid}, skipping")
+        return
+
+    async with lock:
+        logger.info(f"Background refresh: {len(stale_tickers)} tickers for user {uid}")
+        # Refresh semua stale ticker secara PARALEL (lebih cepat dari sequential)
+        # Batasi concurrency ke 3 untuk menghindari rate-limit
+        semaphore = asyncio.Semaphore(3)
+
+        async def _refresh_one(ticker: str):
+            async with semaphore:
+                try:
+                    data = await fetch_stock_price(ticker)
+                    if data and data.get("price"):
+                        doc = {
+                            "ticker": ticker,
+                            "price": data.get("price", 0.0),
+                            "pbv": data.get("pbv", 0.0),
+                            "roe": data.get("roe", 0.0),
+                            "der": data.get("der", 0.0),
+                            "updated_at": datetime.now(timezone.utc),
+                        }
+                        await db.market_prices.update_one(
+                            {"ticker": ticker}, {"$set": doc}, upsert=True
+                        )
+                        logger.info(f"Refreshed {ticker}: {data['price']}")
+                    # Delay kecil untuk sopan ke server eksternal
+                    await asyncio.sleep(0.3)
+                except Exception as e:
+                    logger.warning(f"Background refresh failed for {ticker}: {e}")
+
+        await asyncio.gather(*[_refresh_one(t) for t in stale_tickers])
+        logger.info(f"Background refresh done for user {uid}")
 
 
 @api_router.get("/portfolio/net-worth")
-async def get_net_worth(user: dict = Depends(get_current_user)):
+async def get_net_worth(
+    background_tasks: BackgroundTasks,  # ← tambahkan parameter ini
+    user: dict = Depends(get_current_user)
+):
     uid = user["id"]
 
-    # 1. Get liquid assets
+    # 1. Hitung liquid assets
     pipe = [{"$match": {"user_id": uid}}, {"$group": {"_id": "$type", "total": {"$sum": "$amount"}}}]
     res = await db.transactions.aggregate(pipe).to_list(10)
     inc = sum(r["total"] for r in res if r["_id"] == "income")
     exp = sum(r["total"] for r in res if r["_id"] == "expense")
     liquid_asset = inc - exp
 
-    # 2. Get investments
+    # 2. Ambil investasi
     investments = await db.investments.find({"user_id": uid}, {"_id": 0}).to_list(100)
 
     if not investments:
@@ -964,14 +1024,17 @@ async def get_net_worth(user: dict = Depends(get_current_user)):
             "total_asset_value": liquid_asset,
             "total_unrealized_pl": 0,
             "total_unrealized_pl_percentage": 0,
-            "holdings": []
+            "holdings": [],
+            "prices_updating": False,  # ← flag baru untuk frontend
         }
 
     tickers = [inv["ticker"] for inv in investments]
-    prices_list = await db.market_prices.find({"ticker": {"$in": tickers}}, {"_id": 0}).to_list(len(tickers))
+    prices_list = await db.market_prices.find(
+        {"ticker": {"$in": tickers}}, {"_id": 0}
+    ).to_list(len(tickers))
     price_map = {p["ticker"]: p for p in prices_list}
 
-    # 3. Auto-refresh stale prices (older than 2 minutes)
+    # 3. Identifikasi stale tickers (TAPI JANGAN TUNGGU REFRESH-NYA)
     now = datetime.now(timezone.utc)
     stale_tickers = []
     for ticker_ in tickers:
@@ -981,7 +1044,6 @@ async def get_net_worth(user: dict = Depends(get_current_user)):
         else:
             try:
                 raw_updated = market_data["updated_at"]
-                # Handle both datetime objects (new) and ISO strings (legacy)
                 if isinstance(raw_updated, str):
                     updated_at = datetime.fromisoformat(raw_updated.replace("Z", "+00:00"))
                 else:
@@ -991,15 +1053,17 @@ async def get_net_worth(user: dict = Depends(get_current_user)):
             except Exception:
                 stale_tickers.append(ticker_)
 
+    # PERBAIKAN KUNCI:
+    # Jika ada stale ticker → jadwalkan refresh di background, LANJUTKAN pakai data cache
+    prices_updating = False
     if stale_tickers:
-        logger.info(f"Auto-refreshing {len(stale_tickers)} stale tickers: {stale_tickers}")
-        for st_ticker in stale_tickers:
-            doc = await _refresh_ticker_price(st_ticker)
-            if doc:
-                price_map[doc["ticker"]] = doc
-            await asyncio.sleep(0.5)  # Delay between tickers to avoid rate limiting
+        prices_updating = True
+        logger.info(f"Scheduling background refresh for {len(stale_tickers)} tickers (user {uid})")
+        # add_task = non-blocking, response langsung dikirim
+        background_tasks.add_task(_background_refresh_stale, uid, stale_tickers)
+        # Tidak ada await di sini! Response langsung dilanjutkan dengan data cache.
 
-    # 4. Build holdings with fresh data
+    # 4. Bangun holdings dari data cache yang ada (tanpa menunggu refresh)
     total_investment_value = 0
     total_unrealized_pl = 0
     holdings = []
@@ -1010,10 +1074,7 @@ async def get_net_worth(user: dict = Depends(get_current_user)):
         avg_price = inv["average_buy_price"]
         shares = lot_count * 100
 
-        market_data = price_map.get(ticker)
-        market_data = market_data or {}
-
-        # FIX: If price is 0 or missing, fallback to avg_price to avoid -100% P/L errors
+        market_data = price_map.get(ticker) or {}
         current_m_price = market_data.get("price", 0)
         current_price = current_m_price if current_m_price > 0 else avg_price
 
@@ -1036,16 +1097,15 @@ async def get_net_worth(user: dict = Depends(get_current_user)):
             "pbv": market_data.get("pbv"),
             "roe": market_data.get("roe"),
             "der": market_data.get("der"),
-            "updated_at": market_data.get("updated_at")
+            "updated_at": market_data.get("updated_at"),
+            "price_is_stale": ticker in stale_tickers,  # ← flag per saham untuk UI
         })
 
-    # Calculate total cost based on all holdings to get accurate total percentage
     total_cost_all = sum(inv["average_buy_price"] * (inv["lot_count"] * 100) for inv in investments)
     total_asset_value = liquid_asset + total_investment_value
-
     total_pl_pct = (total_unrealized_pl / total_cost_all * 100) if total_cost_all > 0 else 0
 
-    # --- Auto-snapshot: record at most once per day ---
+    # Auto-snapshot (tetap sama)
     today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     existing_snap = await db.net_worth_snapshots.find_one({"user_id": uid, "date": today_str})
     snap_doc = {
@@ -1059,9 +1119,7 @@ async def get_net_worth(user: dict = Depends(get_current_user)):
         "updated_at": datetime.now(timezone.utc),
     }
     if existing_snap:
-        await db.net_worth_snapshots.update_one(
-            {"user_id": uid, "date": today_str}, {"$set": snap_doc}
-        )
+        await db.net_worth_snapshots.update_one({"user_id": uid, "date": today_str}, {"$set": snap_doc})
     else:
         await db.net_worth_snapshots.insert_one(snap_doc)
 
@@ -1071,7 +1129,8 @@ async def get_net_worth(user: dict = Depends(get_current_user)):
         "total_asset_value": total_asset_value,
         "total_unrealized_pl": total_unrealized_pl,
         "total_unrealized_pl_percentage": total_pl_pct,
-        "holdings": holdings
+        "holdings": holdings,
+        "prices_updating": prices_updating,  # ← frontend bisa tampilkan spinner/indikator
     }
 
 

@@ -9,7 +9,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the rest of the backend source code
 COPY backend/ .
 
-# Provide PORT environment variable and EXPOSE it for Railway
+# Provide PORT environment variable and EXPOSE it
 ENV PORT 8080
 EXPOSE 8080
 

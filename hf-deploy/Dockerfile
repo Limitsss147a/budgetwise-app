@@ -19,7 +19,7 @@ COPY --chown=user . /app
 # Hugging Face Spaces requires port 7860
 EXPOSE 7860
 
-# Run with gunicorn + uvicorn workers (same as Railway setup)
+# Run with gunicorn + uvicorn workers 
 CMD ["gunicorn", "server:app", \
      "--worker-class", "uvicorn.workers.UvicornWorker", \
      "--workers", "2", \

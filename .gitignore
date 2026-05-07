@@ -93,3 +93,12 @@ tmp/
 results.txt
 backend/check_db.py
 backend/.venv/
+
+# AI / Vibe Coding and Deploy config files
+.agent/
+.agentignore
+skill.md
+guideline.md
+guidelines.md
+design_guidelines.json
+deployment_guide.md

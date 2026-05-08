@@ -234,6 +234,8 @@ DEFAULT_CATEGORIES = [
     {"name": "Hadiah / Bonus", "type": "income", "icon": "gift", "color": "#E86A33"},
     {"name": "Investasi", "type": "income", "icon": "trending-up", "color": "#3A6E4B"},
     {"name": "Lainnya", "type": "income", "icon": "ellipsis-horizontal", "color": "#C2A878"},
+    {"name": "Transfer Keluar", "type": "expense", "id": "transfer-out", "icon": "swap-horizontal", "color": "#64748B"},
+    {"name": "Transfer Masuk", "type": "income", "id": "transfer-in", "icon": "swap-horizontal", "color": "#64748B"},
 ]
 
 # ==================== Startup / Lifespan ====================
@@ -348,48 +350,21 @@ async def _init_app_state():
         # Only unset after successful migration for this user
         await db.users.update_one({"id": uid}, {"$unset": {"investments": ""}})
 
-    # Wallet Migration: Ensure all users have a default wallet and all transactions have a wallet_id
+    # Wallet Migration: Ensure all transactions have a wallet_id if wallets exist
+    # However, we won't auto-create a wallet anymore per user request.
+    # We will only assign transactions to the default wallet IF it exists.
     all_users_cursor = db.users.find({}, {"id": 1})
     async for u in all_users_cursor:
         uid = u.get("id")
         if not uid:
             continue
         
-        # Check if user has any wallet
-        wallet_count = await db.wallets.count_documents({"user_id": uid})
-        if wallet_count == 0:
-            # Create default wallet
-            default_wallet_id = str(uuid.uuid4())
-            now_iso = datetime.now(timezone.utc).isoformat()
-            await db.wallets.insert_one({
-                "id": default_wallet_id,
-                "user_id": uid,
-                "name": "Dompet Tunai",
-                "type": "cash",
-                "initial_balance": 0.0,
-                "color": "#10B981",
-                "icon": "wallet",
-                "is_default": True,
-                "created_at": now_iso,
-                "updated_at": now_iso
-            })
-            logger.info(f"Created default wallet for user {uid}")
-            
-            # Update all existing transactions for this user to use this wallet
+        default_wallet = await db.wallets.find_one({"user_id": uid, "is_default": True})
+        if default_wallet:
             await db.transactions.update_many(
                 {"user_id": uid, "wallet_id": {"$exists": False}},
-                {"$set": {"wallet_id": default_wallet_id}}
+                {"$set": {"wallet_id": default_wallet["id"]}}
             )
-            logger.info(f"Updated transactions for user {uid} with wallet_id")
-        else:
-            # If they have wallets but some transactions don't have wallet_id,
-            # assign them to the default wallet
-            default_wallet = await db.wallets.find_one({"user_id": uid, "is_default": True})
-            if default_wallet:
-                await db.transactions.update_many(
-                    {"user_id": uid, "wallet_id": {"$exists": False}},
-                    {"$set": {"wallet_id": default_wallet["id"]}}
-                )
 
 
 @asynccontextmanager

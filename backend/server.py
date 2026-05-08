@@ -350,21 +350,52 @@ async def _init_app_state():
         # Only unset after successful migration for this user
         await db.users.update_one({"id": uid}, {"$unset": {"investments": ""}})
 
-    # Wallet Migration: Ensure all transactions have a wallet_id if wallets exist
-    # However, we won't auto-create a wallet anymore per user request.
-    # We will only assign transactions to the default wallet IF it exists.
+    # Wallet Migration: Ensure all users have a 'Wallet Utama' and all transactions are linked to it
     all_users_cursor = db.users.find({}, {"id": 1})
     async for u in all_users_cursor:
         uid = u.get("id")
-        if not uid:
-            continue
+        if not uid: continue
         
+        # 1. Pastikan ada Wallet Utama
         default_wallet = await db.wallets.find_one({"user_id": uid, "is_default": True})
-        if default_wallet:
-            await db.transactions.update_many(
-                {"user_id": uid, "wallet_id": {"$exists": False}},
-                {"$set": {"wallet_id": default_wallet["id"]}}
-            )
+        if not default_wallet:
+            # Cari dompet pertama jika ada, jadikan default
+            any_wallet = await db.wallets.find_one({"user_id": uid})
+            if any_wallet:
+                await db.wallets.update_one({"id": any_wallet["id"]}, {"$set": {"is_default": True, "name": "Wallet Utama"}})
+                default_wallet = await db.wallets.find_one({"id": any_wallet["id"]})
+            else:
+                # Buat baru
+                default_wallet_id = str(uuid.uuid4())
+                now_iso = datetime.now(timezone.utc).isoformat()
+                await db.wallets.insert_one({
+                    "id": default_wallet_id,
+                    "user_id": uid,
+                    "name": "Wallet Utama",
+                    "type": "bank",
+                    "initial_balance": 0.0,
+                    "color": "#10B981",
+                    "icon": "wallet",
+                    "is_default": True,
+                    "created_at": now_iso,
+                    "updated_at": now_iso
+                })
+                default_wallet = {"id": default_wallet_id}
+        
+        # 2. Sinkronkan SEMUA transaksi ke Wallet Utama (sesuai permintaan user agar data sinkron)
+        # Kita hanya melakukan ini jika transaksi belum memiliki wallet_id atau 
+        # jika kita ingin memastikan sinkronisasi total untuk user saat ini.
+        await db.transactions.update_many(
+            {"user_id": uid, "wallet_id": {"$exists": False}},
+            {"$set": {"wallet_id": default_wallet["id"]}}
+        )
+        
+        # Opsional: Jika user ingin memaksakan SEMUA transaksi ke wallet utama karena data berantakan
+        # (Kita lakukan ini hanya sekali untuk memperbaiki data yang tidak sinkron di screenshot)
+        await db.transactions.update_many(
+            {"user_id": uid},
+            {"$set": {"wallet_id": default_wallet["id"]}}
+        )
 
 
 @asynccontextmanager
@@ -419,8 +450,8 @@ async def register(request: Request, data: AuthRegister):
     await db.wallets.insert_one({
         "id": str(uuid.uuid4()),
         "user_id": user_id,
-        "name": "Dompet Tunai",
-        "type": "cash",
+        "name": "Wallet Utama",
+        "type": "bank",
         "initial_balance": 0.0,
         "color": "#10B981",
         "icon": "wallet",

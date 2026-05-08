@@ -134,10 +134,33 @@ class CategoryCreate(BaseModel):
     color: str
 
 
+class WalletCreate(BaseModel):
+    name: str
+    type: str # bank, ewallet, cash
+    initial_balance: float = 0.0
+    color: str
+    icon: str
+
+class WalletUpdate(BaseModel):
+    name: Optional[str] = None
+    type: Optional[str] = None
+    initial_balance: Optional[float] = None
+    color: Optional[str] = None
+    icon: Optional[str] = None
+    is_default: Optional[bool] = None
+
+class WalletTransfer(BaseModel):
+    from_wallet_id: str
+    to_wallet_id: str
+    amount: float
+    description: str = "Transfer antar wallet"
+    date: str
+
 class TransactionCreate(BaseModel):
     type: str
     amount: float
     category_id: str
+    wallet_id: str
     description: str = ""
     date: str
     photo_uri: str = ""
@@ -147,6 +170,7 @@ class TransactionUpdate(BaseModel):
     type: Optional[str] = None
     amount: Optional[float] = None
     category_id: Optional[str] = None
+    wallet_id: Optional[str] = None
     description: Optional[str] = None
     date: Optional[str] = None
     photo_uri: Optional[str] = None
@@ -256,6 +280,13 @@ async def _init_app_state():
         name="user_ticker_unique"
     )
 
+    # Wallet lookup
+    await db.wallets.create_index(
+        [("user_id", 1), ("id", 1)],
+        unique=True,
+        name="user_wallet_unique"
+    )
+
     # Seed categories
     if await db.categories.count_documents({"is_default": True}) == 0:
         cats = [{"id": str(uuid.uuid4()), **c, "is_default": True, "created_at": datetime.now(timezone.utc).isoformat()} for c in DEFAULT_CATEGORIES]
@@ -317,6 +348,49 @@ async def _init_app_state():
         # Only unset after successful migration for this user
         await db.users.update_one({"id": uid}, {"$unset": {"investments": ""}})
 
+    # Wallet Migration: Ensure all users have a default wallet and all transactions have a wallet_id
+    all_users_cursor = db.users.find({}, {"id": 1})
+    async for u in all_users_cursor:
+        uid = u.get("id")
+        if not uid:
+            continue
+        
+        # Check if user has any wallet
+        wallet_count = await db.wallets.count_documents({"user_id": uid})
+        if wallet_count == 0:
+            # Create default wallet
+            default_wallet_id = str(uuid.uuid4())
+            now_iso = datetime.now(timezone.utc).isoformat()
+            await db.wallets.insert_one({
+                "id": default_wallet_id,
+                "user_id": uid,
+                "name": "Dompet Tunai",
+                "type": "cash",
+                "initial_balance": 0.0,
+                "color": "#10B981",
+                "icon": "wallet",
+                "is_default": True,
+                "created_at": now_iso,
+                "updated_at": now_iso
+            })
+            logger.info(f"Created default wallet for user {uid}")
+            
+            # Update all existing transactions for this user to use this wallet
+            await db.transactions.update_many(
+                {"user_id": uid, "wallet_id": {"$exists": False}},
+                {"$set": {"wallet_id": default_wallet_id}}
+            )
+            logger.info(f"Updated transactions for user {uid} with wallet_id")
+        else:
+            # If they have wallets but some transactions don't have wallet_id,
+            # assign them to the default wallet
+            default_wallet = await db.wallets.find_one({"user_id": uid, "is_default": True})
+            if default_wallet:
+                await db.transactions.update_many(
+                    {"user_id": uid, "wallet_id": {"$exists": False}},
+                    {"$set": {"wallet_id": default_wallet["id"]}}
+                )
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -365,6 +439,21 @@ async def register(request: Request, data: AuthRegister):
     now = datetime.now(timezone.utc).isoformat()
     await db.users.insert_one({"id": user_id, "email": email, "password_hash": hash_password(data.password), "name": name, "role": "user", "created_at": now})
     await db.settings.insert_one({"user_id": user_id, "currency": "IDR", "theme": "light", "pin_hash": ""})
+    
+    # Create default wallet for new user
+    await db.wallets.insert_one({
+        "id": str(uuid.uuid4()),
+        "user_id": user_id,
+        "name": "Dompet Tunai",
+        "type": "cash",
+        "initial_balance": 0.0,
+        "color": "#10B981",
+        "icon": "wallet",
+        "is_default": True,
+        "created_at": now,
+        "updated_at": now
+    })
+    
     return {"user": {"id": user_id, "email": email, "name": data.name.strip(), "role": "user"}, "access_token": create_access_token(user_id, email), "refresh_token": create_refresh_token(user_id)}
 
 
@@ -408,6 +497,134 @@ async def health():
         return {"status": "ok", "db": "connected"}
     except Exception as e:
         raise HTTPException(503, f"Database unavailable: {str(e)}")
+
+# ==================== Wallets ====================
+
+
+@api_router.get("/wallets")
+async def get_wallets(user: dict = Depends(get_current_user)):
+    uid = user["id"]
+    wallets = await db.wallets.find({"user_id": uid}, {"_id": 0}).to_list(50)
+    
+    # Calculate current balance for each wallet
+    # current_balance = initial_balance + sum(income) - sum(expense)
+    for w in wallets:
+        wid = w["id"]
+        pipe = [
+            {"$match": {"user_id": uid, "wallet_id": wid}},
+            {"$group": {"_id": "$type", "total": {"$sum": "$amount"}}}
+        ]
+        res = await db.transactions.aggregate(pipe).to_list(10)
+        inc = sum(r["total"] for r in res if r["_id"] == "income")
+        exp = sum(r["total"] for r in res if r["_id"] == "expense")
+        w["balance"] = w.get("initial_balance", 0.0) + inc - exp
+    
+    return wallets
+
+
+@api_router.post("/wallets")
+async def create_wallet(data: WalletCreate, user: dict = Depends(get_current_user)):
+    uid = user["id"]
+    wid = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Check if it's the first wallet, if so make it default
+    is_first = await db.wallets.count_documents({"user_id": uid}) == 0
+    
+    d = {
+        "id": wid,
+        "user_id": uid,
+        **data.model_dump(),
+        "is_default": is_first,
+        "created_at": now,
+        "updated_at": now
+    }
+    await db.wallets.insert_one(d)
+    d.pop("_id", None)
+    d["balance"] = d["initial_balance"]
+    return d
+
+
+@api_router.put("/wallets/{wid}")
+async def update_wallet(wid: str, data: WalletUpdate, user: dict = Depends(get_current_user)):
+    uid = user["id"]
+    e = await db.wallets.find_one({"id": wid, "user_id": uid})
+    if not e:
+        raise HTTPException(404, "Wallet tidak ditemukan")
+    
+    upd = {k: v for k, v in data.model_dump().items() if v is not None}
+    upd["updated_at"] = datetime.now(timezone.utc).isoformat()
+    
+    # If setting as default, unset other default wallets
+    if upd.get("is_default"):
+        await db.wallets.update_many({"user_id": uid}, {"$set": {"is_default": False}})
+        
+    await db.wallets.update_one({"id": wid}, {"$set": upd})
+    return await db.wallets.find_one({"id": wid}, {"_id": 0})
+
+
+@api_router.delete("/wallets/{wid}")
+async def delete_wallet(wid: str, user: dict = Depends(get_current_user)):
+    uid = user["id"]
+    e = await db.wallets.find_one({"id": wid, "user_id": uid})
+    if not e:
+        raise HTTPException(404, "Wallet tidak ditemukan")
+        
+    # Check if there are transactions associated with this wallet
+    tx_count = await db.transactions.count_documents({"user_id": uid, "wallet_id": wid})
+    if tx_count > 0:
+        raise HTTPException(400, "Tidak bisa menghapus wallet yang memiliki transaksi. Pindahkan transaksi terlebih dahulu.")
+        
+    if e.get("is_default"):
+        raise HTTPException(400, "Tidak bisa menghapus wallet default.")
+        
+    await db.wallets.delete_one({"id": wid})
+    return {"message": "Wallet dihapus"}
+
+
+@api_router.post("/wallets/transfer")
+async def transfer_balance(data: WalletTransfer, user: dict = Depends(get_current_user)):
+    uid = user["id"]
+    fw = await db.wallets.find_one({"id": data.from_wallet_id, "user_id": uid})
+    tw = await db.wallets.find_one({"id": data.to_wallet_id, "user_id": uid})
+    
+    if not fw or not tw:
+        raise HTTPException(404, "Salah satu wallet tidak ditemukan")
+        
+    now_iso = datetime.now(timezone.utc).isoformat()
+    tx_id_1 = str(uuid.uuid4())
+    tx_id_2 = str(uuid.uuid4())
+    
+    # Create outgoing transaction
+    out_tx = {
+        "id": tx_id_1,
+        "user_id": uid,
+        "type": "expense",
+        "amount": data.amount,
+        "category_id": "transfer-out", # Special category or just "Lainnya"
+        "wallet_id": data.from_wallet_id,
+        "description": f"Transfer ke {tw['name']}: {data.description}",
+        "date": data.date,
+        "created_at": now_iso,
+        "updated_at": now_iso
+    }
+    
+    # Create incoming transaction
+    in_tx = {
+        "id": tx_id_2,
+        "user_id": uid,
+        "type": "income",
+        "amount": data.amount,
+        "category_id": "transfer-in",
+        "wallet_id": data.to_wallet_id,
+        "description": f"Transfer dari {fw['name']}: {data.description}",
+        "date": data.date,
+        "created_at": now_iso,
+        "updated_at": now_iso
+    }
+    
+    await db.transactions.insert_many([out_tx, in_tx])
+    return {"message": "Transfer berhasil", "from_transaction_id": tx_id_1, "to_transaction_id": tx_id_2}
 
 # ==================== Categories ====================
 

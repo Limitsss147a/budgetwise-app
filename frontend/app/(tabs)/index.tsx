@@ -11,7 +11,7 @@ import { useAuth } from '../../src/contexts/AuthContext';
 import { fonts } from '../../src/constants/fonts';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
-import type { Summary, CategoryBreakdown, DailyTrend, Transaction, Category } from '../../src/types';
+import type { Summary, CategoryBreakdown, DailyTrend, Transaction, Category, Wallet } from '../../src/types';
 import { Card, CardTitle } from '../../src/components/ui/Card';
 import { DonutChart } from '../../src/components/ui/DonutChart';
 import { LoadingScreen } from '../../src/components/ui/LoadingScreen';
@@ -29,18 +29,20 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [wallets, setWallets] = useState<Wallet[]>([]);
   const month = getCurrentMonth();
 
   const loadData = useCallback(async () => {
     try {
       setLoadError(null);
-      const [s, b, t, tx, c] = await Promise.all([
+      const [s, b, t, tx, c, walls] = await Promise.all([
         api.getSummary(month), api.getCategoryBreakdown(month),
         api.getDailyTrend(7), api.getTransactions({ page: '1', limit: '5', sort_by: 'date', sort_order: 'desc' }),
         api.getCategories(),
+        api.getWallets(),
       ]);
       setSummary(s); setBreakdown(b.breakdown); setDailyTrend(t);
-      setRecentTx(tx.transactions); setCategories(c);
+      setRecentTx(tx.transactions); setCategories(c); setWallets(walls);
     } catch (e: any) {
       console.error('[Dashboard] load error', e);
       setLoadError(e?.message || 'Gagal memuat data');
@@ -149,13 +151,39 @@ export default function Dashboard() {
                   <View>
                     <Text style={[s.balSub, { color: 'rgba(255,255,255,0.7)', fontFamily: fonts.regular }]}>Selisih Bulan Ini</Text>
                     <Text style={[s.balChange, { color: '#FFF', fontFamily: fonts.semiBold }]}>
-                      {(summary?.month_income || 0) - (summary?.month_expense || 0) >= 0 ? '+' : ''}{formatRupiah((summary?.month_income || 0) - (summary?.month_expense || 0))}
+                      {(summary?.month_income || 0) - (summary?.month_expense || 0) >= 0 ? '+' : '-'}{formatRupiah((summary?.month_income || 0) - (summary?.month_expense || 0))}
                     </Text>
                   </View>
                   <Ionicons name={((summary?.month_income || 0) - (summary?.month_expense || 0)) >= 0 ? 'stats-chart' : 'trending-down'} size={24} color="rgba(255,255,255,0.6)" />
                 </View>
               </LinearGradient>
             </BlurView>
+          </View>
+
+          {/* Wallets Carousel */}
+          <View style={s.walletSection}>
+            <View style={s.sectionHeader}>
+              <Text style={[s.sectionTitle, { color: colors.text, fontFamily: fonts.semiBold }]}>Dompet Saya</Text>
+              <TouchableOpacity onPress={() => router.push('/wallets' as any)}>
+                <Text style={[s.seeAll, { color: colors.brand, fontFamily: fonts.semiBold }]}>Kelola</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.walletScroll}>
+              {wallets.map(w => (
+                <TouchableOpacity key={w.id} onPress={() => router.push('/wallets' as any)} style={[s.walletItem, { backgroundColor: theme === 'dark' ? '#1F2937' : '#FFF', borderColor: colors.border }]}>
+                   <View style={[s.walletIcon, { backgroundColor: w.color + '20' }]}>
+                      <Ionicons name={w.icon as any} size={20} color={w.color} />
+                   </View>
+                   <View style={{ flex: 1 }}>
+                      <Text style={[s.walletName, { color: colors.text, fontFamily: fonts.medium }]} numberOfLines={1}>{w.name}</Text>
+                      <Text style={[s.walletBal, { color: colors.textSecondary, fontFamily: fonts.bold }]}>{formatRupiah(w.balance)}</Text>
+                   </View>
+                </TouchableOpacity>
+              ))}
+              <TouchableOpacity onPress={() => router.push('/wallets' as any)} style={[s.walletAdd, { borderColor: colors.border, borderStyle: 'dashed' }]}>
+                <Ionicons name="add" size={24} color={colors.textTertiary} />
+              </TouchableOpacity>
+            </ScrollView>
           </View>
 
           {/* Regular Cards with Glass Effect */}
@@ -324,4 +352,15 @@ const s = StyleSheet.create({
   txName: { fontSize: 14 },
   txDate: { fontSize: 11, marginTop: 2 },
   txAmt: { fontSize: 14 },
+  
+  walletSection: { marginBottom: 24 },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  sectionTitle: { fontSize: 16 },
+  seeAll: { fontSize: 13 },
+  walletScroll: { gap: 12, paddingRight: 20 },
+  walletItem: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 16, borderWidth: 1, minWidth: 160, gap: 12 },
+  walletIcon: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  walletName: { fontSize: 13, marginBottom: 2 },
+  walletBal: { fontSize: 14 },
+  walletAdd: { width: 60, height: 64, borderRadius: 16, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
 });

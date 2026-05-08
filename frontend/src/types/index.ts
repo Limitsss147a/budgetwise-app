@@ -13,9 +13,23 @@ export interface Transaction {
   type: 'income' | 'expense';
   amount: number;
   category_id: string;
+  wallet_id: string;
   description: string;
   date: string;
   photo_uri?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Wallet {
+  id: string;
+  name: string;
+  type: 'bank' | 'ewallet' | 'cash';
+  initial_balance: number;
+  balance: number; // calculated from backend
+  color: string;
+  icon: string;
+  is_default: boolean;
   created_at: string;
   updated_at: string;
 }

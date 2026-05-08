@@ -1,7 +1,7 @@
 import { SafeStorage } from './storage';
 import type {
   Category, Transaction, Budget, Settings, Summary,
-  CategoryBreakdown, DailyTrend, MonthlyTrend, TransactionListResponse
+  CategoryBreakdown, DailyTrend, MonthlyTrend, TransactionListResponse, Wallet
 } from '../types';
 
 const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
@@ -117,4 +117,10 @@ export const api = {
   addInvestment: (data: { ticker: string, lot_count: number, average_buy_price: number }): Promise<{message: string, investments: any[]}> => request('/api/portfolio/investments', { method: 'POST', body: JSON.stringify(data) }),
   updateInvestment: (ticker: string, data: { lot_count?: number, average_buy_price?: number }): Promise<{message: string, investments: any[]}> => request(`/api/portfolio/investments/${encodeURIComponent(ticker)}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteInvestment: (ticker: string): Promise<{message: string}> => request(`/api/portfolio/investments/${encodeURIComponent(ticker)}`, { method: 'DELETE' }),
+  
+  getWallets: (): Promise<Wallet[]> => request('/api/wallets'),
+  createWallet: (data: any): Promise<Wallet> => request('/api/wallets', { method: 'POST', body: JSON.stringify(data) }),
+  updateWallet: (id: string, data: Partial<Wallet>): Promise<Wallet> => request(`/api/wallets/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteWallet: (id: string): Promise<{message: string}> => request(`/api/wallets/${id}`, { method: 'DELETE' }),
+  transferBalance: (data: { from_wallet_id: string, to_wallet_id: string, amount: number, description?: string, date: string }): Promise<{message: string}> => request('/api/wallets/transfer', { method: 'POST', body: JSON.stringify(data) }),
 };

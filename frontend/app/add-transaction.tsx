@@ -28,6 +28,8 @@ export default function AddTransaction() {
   const [date, setDate] = useState(new Date());
   const [showPicker, setShowPicker] = useState(false);
   const [formError, setFormError] = useState('');
+  const [wallets, setWallets] = useState<any[]>([]);
+  const [walletId, setWalletId] = useState('');
 
   useEffect(() => {
     const init = async () => {
@@ -39,9 +41,15 @@ export default function AddTransaction() {
           setCategoryId(tx.category_id);
           setDescription(tx.description || '');
           setDate(new Date(tx.date));
+          setWalletId(tx.wallet_id);
         }
-        const cats = await api.getCategories();
+        const [cats, walls] = await Promise.all([api.getCategories(), api.getWallets()]);
         setCategories(cats);
+        setWallets(walls);
+        if (!id && walls.length > 0) {
+          const def = walls.find(w => w.is_default) || walls[0];
+          setWalletId(def.id);
+        }
       } catch (e) { console.error(e); }
       finally { setInitLoading(false); }
     };
@@ -66,6 +74,7 @@ export default function AddTransaction() {
     try {
       const data = {
         type, amount: amt, category_id: categoryId,
+        wallet_id: walletId,
         description, date: date.toISOString(),
       };
       if (isEdit) await api.updateTransaction(id!, data);
@@ -144,6 +153,20 @@ export default function AddTransaction() {
               onChange={(e, d) => { setShowPicker(false); if (d) setDate(d); }} />
           )}
 
+          <Text style={[st.label, { color: colors.textTertiary, fontFamily: fonts.semiBold }]}>Dompet / Sumber Dana</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.walletScroll}>
+            {wallets.map(w => (
+              <TouchableOpacity key={w.id} 
+                style={[st.walletItem, { backgroundColor: colors.bgCard, borderColor: colors.border }, walletId === w.id && { borderColor: w.color, backgroundColor: w.color + '10' }]}
+                onPress={() => setWalletId(w.id)}>
+                <View style={[st.walletIcon, { backgroundColor: w.color }]}>
+                  <Ionicons name={w.icon} size={14} color="#FFF" />
+                </View>
+                <Text style={[st.walletName, { color: colors.text, fontFamily: fonts.medium }, walletId === w.id && { color: w.color }]}>{w.name}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
           <Text style={[st.label, { color: colors.textTertiary, fontFamily: fonts.semiBold }]}>Kategori</Text>
           <View style={st.catGrid}>
             {filteredCats.map(cat => (
@@ -215,4 +238,8 @@ const st = StyleSheet.create({
   saveBtnText: { fontSize: 16, color: '#FFF' },
   deleteBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: 14, paddingVertical: 14, gap: 8, marginTop: 16, borderWidth: 1 },
   deleteBtnText: { fontSize: 15 },
+  walletScroll: { gap: 10, marginBottom: 20 },
+  walletItem: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, borderWidth: 1, gap: 8 },
+  walletIcon: { width: 24, height: 24, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  walletName: { fontSize: 14 },
 });

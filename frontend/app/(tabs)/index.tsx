@@ -356,7 +356,6 @@ const s = StyleSheet.create({
   walletSection: { marginBottom: 24 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   sectionTitle: { fontSize: 16 },
-  seeAll: { fontSize: 13 },
   walletScroll: { gap: 12, paddingRight: 20 },
   walletItem: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 16, borderWidth: 1, minWidth: 160, gap: 12 },
   walletIcon: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },

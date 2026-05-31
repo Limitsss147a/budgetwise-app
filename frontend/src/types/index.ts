@@ -10,7 +10,7 @@ export interface Category {
 
 export interface Transaction {
   id: string;
-  type: 'income' | 'expense';
+  type: 'income' | 'expense' | 'transfer_in' | 'transfer_out';
   amount: number;
   category_id: string;
   wallet_id: string;

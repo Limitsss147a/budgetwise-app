@@ -38,7 +38,7 @@ export default function WalletsScreen() {
 
   // Form state
   const [name, setName] = useState('');
-  const [type, setType] = useState('bank');
+  const [type, setType] = useState<'bank'|'ewallet'|'cash'>('bank');
   const [initialBalance, setInitialBalance] = useState('0');
   const [selectedColor, setSelectedColor] = useState(COLORS[0]);
 

@@ -382,18 +382,9 @@ async def _init_app_state():
                 })
                 default_wallet = {"id": default_wallet_id}
         
-        # 2. Sinkronkan SEMUA transaksi ke Wallet Utama (sesuai permintaan user agar data sinkron)
-        # Kita hanya melakukan ini jika transaksi belum memiliki wallet_id atau 
-        # jika kita ingin memastikan sinkronisasi total untuk user saat ini.
+        # Migration for missing wallet_id ONLY (do not overwrite existing ones)
         await db.transactions.update_many(
             {"user_id": uid, "wallet_id": {"$exists": False}},
-            {"$set": {"wallet_id": default_wallet["id"]}}
-        )
-        
-        # Opsional: Jika user ingin memaksakan SEMUA transaksi ke wallet utama karena data berantakan
-        # (Kita lakukan ini hanya sekali untuk memperbaiki data yang tidak sinkron di screenshot)
-        await db.transactions.update_many(
-            {"user_id": uid},
             {"$set": {"wallet_id": default_wallet["id"]}}
         )
 
@@ -521,8 +512,8 @@ async def get_wallets(user: dict = Depends(get_current_user)):
             {"$group": {"_id": "$type", "total": {"$sum": "$amount"}}}
         ]
         res = await db.transactions.aggregate(pipe).to_list(10)
-        inc = sum(r["total"] for r in res if r["_id"] == "income")
-        exp = sum(r["total"] for r in res if r["_id"] == "expense")
+        inc = sum(r["total"] for r in res if r["_id"] in ("income", "transfer_in"))
+        exp = sum(r["total"] for r in res if r["_id"] in ("expense", "transfer_out"))
         w["balance"] = w.get("initial_balance", 0.0) + inc - exp
     
     return wallets
@@ -605,7 +596,7 @@ async def transfer_balance(data: WalletTransfer, user: dict = Depends(get_curren
     out_tx = {
         "id": tx_id_1,
         "user_id": uid,
-        "type": "expense",
+        "type": "transfer_out",
         "amount": data.amount,
         "category_id": "transfer-out", # Special category or just "Lainnya"
         "wallet_id": data.from_wallet_id,
@@ -619,7 +610,7 @@ async def transfer_balance(data: WalletTransfer, user: dict = Depends(get_curren
     in_tx = {
         "id": tx_id_2,
         "user_id": uid,
-        "type": "income",
+        "type": "transfer_in",
         "amount": data.amount,
         "category_id": "transfer-in",
         "wallet_id": data.to_wallet_id,

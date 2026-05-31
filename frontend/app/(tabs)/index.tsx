@@ -286,8 +286,8 @@ export default function Dashboard() {
                             <Text style={[s.txName, { color: colors.text, fontFamily: fonts.medium }]} numberOfLines={1}>{cat?.name || 'Lainnya'}</Text>
                             <Text style={[s.txDate, { color: colors.textTertiary, fontFamily: fonts.regular }]}>{formatDate(tx.date)}</Text>
                           </View>
-                          <Text style={[s.txAmt, { color: tx.type === 'income' ? colors.income : colors.expense, fontFamily: fonts.bold }]}>
-                            {tx.type === 'income' ? '+' : '-'}{formatRupiah(tx.amount)}
+                          <Text style={[s.txAmt, { color: (tx.type === 'income' || tx.type === 'transfer_in') ? colors.income : colors.expense, fontFamily: fonts.bold }]}>
+                            {(tx.type === 'income' || tx.type === 'transfer_in') ? '+' : '-'}{formatRupiah(tx.amount)}
                           </Text>
                         </View>
                       );

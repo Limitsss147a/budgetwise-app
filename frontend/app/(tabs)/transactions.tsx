@@ -124,8 +124,8 @@ export default function Transactions() {
                 <Text style={[st.txDesc, { color: colors.textTertiary, fontFamily: fonts.regular }]} numberOfLines={1}>{tx.description || formatDate(tx.date)}</Text>
               </View>
               <View style={st.txRight}>
-                <Text style={[st.txAmt, { color: tx.type === 'income' ? '#4ADE80' : '#FB7185', fontFamily: fonts.bold }]}>
-                  {tx.type === 'income' ? '+' : '-'}{formatRupiah(tx.amount)}
+                <Text style={[st.txAmt, { color: (tx.type === 'income' || tx.type === 'transfer_in') ? '#4ADE80' : '#FB7185', fontFamily: fonts.bold }]}>
+                  {(tx.type === 'income' || tx.type === 'transfer_in') ? '+' : '-'}{formatRupiah(tx.amount)}
                 </Text>
               </View>
               {showSwipeHint && (

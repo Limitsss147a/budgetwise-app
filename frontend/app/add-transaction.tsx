@@ -7,7 +7,7 @@ import { api } from '../src/utils/api';
 import { formatAmountInput, parseAmountInput } from '../src/utils/format';
 import { useTheme } from '../src/contexts/ThemeContext';
 import { fonts } from '../src/constants/fonts';
-import type { Category } from '../src/types';
+import type { Category, Transaction } from '../src/types';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import Toast from 'react-native-toast-message';
 import { format } from 'date-fns';
@@ -18,7 +18,7 @@ export default function AddTransaction() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const isEdit = !!id;
 
-  const [type, setType] = useState<'income' | 'expense'>('expense');
+  const [type, setType] = useState<Transaction['type']>('expense');
   const [amount, setAmount] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [description, setDescription] = useState('');

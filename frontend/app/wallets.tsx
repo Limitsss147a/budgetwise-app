@@ -14,9 +14,9 @@ import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 
 const WALLET_TYPES = [
-  { label: 'Bank / M-Banking', value: 'bank', icon: 'card-outline' },
-  { label: 'E-Wallet', value: 'ewallet', icon: 'phone-portrait-outline' },
-  { label: 'Tunai / Cash', value: 'cash', icon: 'cash-outline' },
+  { label: 'Bank / M-Banking', value: 'bank' as const, icon: 'card-outline' },
+  { label: 'E-Wallet', value: 'ewallet' as const, icon: 'phone-portrait-outline' },
+  { label: 'Tunai / Cash', value: 'cash' as const, icon: 'cash-outline' },
 ];
 
 const COLORS = ['#10B981', '#3B82F6', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#64748B'];

@@ -43,6 +43,18 @@ export interface Budget {
   updated_at: string;
 }
 
+export interface Goal {
+  id: string;
+  name: string;
+  target_amount: number;
+  current_amount: number;
+  color: string;
+  icon: string;
+  deadline?: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Settings {
   id: string;
   currency: string;

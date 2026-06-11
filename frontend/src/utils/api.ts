@@ -85,8 +85,14 @@ export const api = {
   deleteTransaction: (id: string): Promise<{message: string}> => request(`/api/transactions/${id}`, { method: 'DELETE' }),
 
   getBudgets: (month?: string): Promise<Budget[]> => request(`/api/budgets${month ? `?month=${month}` : ''}`),
-  createBudget: (data: Omit<Budget, 'id' | 'created_at' | 'updated_at'>): Promise<Budget> => request('/api/budgets', { method: 'POST', body: JSON.stringify(data) }),
+  createBudget: (data: Partial<Budget>): Promise<Budget> => request('/api/budgets', { method: 'POST', body: JSON.stringify(data) }),
   deleteBudget: (id: string): Promise<{message: string}> => request(`/api/budgets/${id}`, { method: 'DELETE' }),
+
+  getGoals: (): Promise<any[]> => request('/api/goals'),
+  createGoal: (data: any): Promise<any> => request('/api/goals', { method: 'POST', body: JSON.stringify(data) }),
+  updateGoal: (id: string, data: any): Promise<any> => request(`/api/goals/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteGoal: (id: string): Promise<{message: string}> => request(`/api/goals/${id}`, { method: 'DELETE' }),
+  contributeGoal: (id: string, data: { wallet_id: string, amount: number }): Promise<{message: string, goal: any}> => request(`/api/goals/${id}/contribute`, { method: 'POST', body: JSON.stringify(data) }),
 
   getSummary: (month?: string): Promise<Summary> => request(`/api/analytics/summary${month ? `?month=${month}` : ''}`),
   getTagsAnalytics: (month?: string): Promise<any[]> => request(`/api/analytics/tags${month ? `?month=${month}` : ''}`),

@@ -198,6 +198,25 @@ class BudgetCreate(BaseModel):
     month: str
 
 
+class GoalCreate(BaseModel):
+    name: str
+    target_amount: float
+    color: Optional[str] = "#10B981"
+    icon: Optional[str] = "flag"
+    deadline: Optional[str] = None
+
+class GoalUpdate(BaseModel):
+    name: Optional[str] = None
+    target_amount: Optional[float] = None
+    color: Optional[str] = None
+    icon: Optional[str] = None
+    deadline: Optional[str] = None
+
+class GoalContribute(BaseModel):
+    wallet_id: str
+    amount: float
+
+
 class SettingsUpdate(BaseModel):
     currency: Optional[str] = None
     date_format: Optional[str] = None
@@ -796,6 +815,67 @@ async def delete_budget(bid: str, user: dict = Depends(get_current_user)):
     if r.deleted_count == 0:
         raise HTTPException(404, "Tidak ditemukan")
     return {"message": "Dihapus"}
+
+# ==================== Goals ====================
+
+@api_router.get("/goals")
+async def get_goals(user: dict = Depends(get_current_user)):
+    return await db.goals.find({"user_id": user["id"]}, {"_id": 0}).to_list(100)
+
+@api_router.post("/goals")
+async def create_goal(data: GoalCreate, user: dict = Depends(get_current_user)):
+    now = datetime.now(timezone.utc).isoformat()
+    d = {"id": str(uuid.uuid4()), **data.model_dump(), "current_amount": 0.0, "user_id": user["id"], "created_at": now, "updated_at": now}
+    await db.goals.insert_one(d)
+    d.pop("_id", None)
+    return d
+
+@api_router.put("/goals/{gid}")
+async def update_goal(gid: str, data: GoalUpdate, user: dict = Depends(get_current_user)):
+    e = await db.goals.find_one({"id": gid, "user_id": user["id"]})
+    if not e:
+        raise HTTPException(404, "Goal tidak ditemukan")
+    upd = {k: v for k, v in data.model_dump().items() if v is not None}
+    upd["updated_at"] = datetime.now(timezone.utc).isoformat()
+    await db.goals.update_one({"id": gid}, {"$set": upd})
+    return await db.goals.find_one({"id": gid}, {"_id": 0})
+
+@api_router.delete("/goals/{gid}")
+async def delete_goal(gid: str, user: dict = Depends(get_current_user)):
+    r = await db.goals.delete_one({"id": gid, "user_id": user["id"]})
+    if r.deleted_count == 0:
+        raise HTTPException(404, "Goal tidak ditemukan")
+    return {"message": "Dihapus"}
+
+@api_router.post("/goals/{gid}/contribute")
+async def contribute_goal(gid: str, data: GoalContribute, user: dict = Depends(get_current_user)):
+    e = await db.goals.find_one({"id": gid, "user_id": user["id"]})
+    if not e:
+        raise HTTPException(404, "Goal tidak ditemukan")
+    w = await db.wallets.find_one({"id": data.wallet_id, "user_id": user["id"]})
+    if not w:
+        raise HTTPException(404, "Wallet tidak ditemukan")
+    if w["balance"] < data.amount:
+        raise HTTPException(400, "Saldo wallet tidak cukup")
+    now = datetime.now(timezone.utc).isoformat()
+    await db.wallets.update_one({"id": data.wallet_id}, {"$inc": {"balance": -data.amount}, "$set": {"updated_at": now}})
+    await db.goals.update_one({"id": gid}, {"$inc": {"current_amount": data.amount}, "$set": {"updated_at": now}})
+    tx = {
+        "id": str(uuid.uuid4()),
+        "user_id": user["id"],
+        "wallet_id": data.wallet_id,
+        "type": "transfer_out",
+        "amount": data.amount,
+        "date": now[:10],
+        "description": f"Alokasi ke: {e.get('name', 'Goal')}",
+        "category_id": "transfer",
+        "destination_id": f"goal:{gid}",
+        "tags": extract_tags(f"Alokasi ke: {e.get('name', 'Goal')}"),
+        "created_at": now,
+        "updated_at": now
+    }
+    await db.transactions.insert_one(tx)
+    return {"message": "Berhasil menambah tabungan", "goal": await db.goals.find_one({"id": gid}, {"_id": 0})}
 
 # ==================== Analytics ====================
 

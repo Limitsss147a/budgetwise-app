@@ -24,16 +24,17 @@ export default function Reports() {
   const [trend, setTrend] = useState<MonthlyTrend[]>([]);
   const [stats, setStats] = useState<any>(null);
   const [summary, setSummary] = useState<any>(null);
+  const [tagsAnalytics, setTagsAnalytics] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
-      const [b, t, st, sm] = await Promise.all([
+      const [b, t, st, sm, tagsData] = await Promise.all([
         api.getCategoryBreakdown(month), api.getMonthlyTrend(period),
-        api.getStats(month), api.getSummary(month),
+        api.getStats(month), api.getSummary(month), api.getTagsAnalytics(month),
       ]);
-      setBreakdown(b.breakdown); setTrend(t); setStats(st); setSummary(sm);
+      setBreakdown(b.breakdown); setTrend(t); setStats(st); setSummary(sm); setTagsAnalytics(tagsData);
     } catch (e) { console.error(e); }
     finally { setLoading(false); setRefreshing(false); }
   }, [month, period]);
@@ -186,6 +187,27 @@ export default function Reports() {
                     <View style={[st.bDot, { backgroundColor: item.category_color }]} />
                     <Text style={[st.bName, { color: colors.textSecondary, fontFamily: fonts.regular }]} numberOfLines={1}>{item.category_name}</Text>
                     <Text style={[st.bAmt, { color: colors.text, fontFamily: fonts.semiBold }]}>{formatRupiah(item.total)}</Text>
+                  </View>
+                ))}
+              </View>
+            </Card>
+          )}
+
+          {tagsAnalytics && tagsAnalytics.length > 0 && (
+            <Card style={{ marginBottom: 16 }}>
+              <CardTitle>Top Hashtag</CardTitle>
+              <Text style={{ fontSize: 12, color: colors.textTertiary, fontFamily: fonts.regular, marginBottom: 12 }}>Pengeluaran terbanyak berdasarkan hashtag</Text>
+              <View style={st.breakdownList}>
+                {tagsAnalytics.map((item, index) => (
+                  <View key={item.tag} style={st.breakdownRow}>
+                    <View style={{ width: 24, height: 24, borderRadius: 8, backgroundColor: 'rgba(59,130,246,0.1)', justifyContent: 'center', alignItems: 'center' }}>
+                      <Text style={{ color: '#3B82F6', fontSize: 12, fontFamily: fonts.bold }}>#</Text>
+                    </View>
+                    <Text style={[st.bName, { color: colors.textSecondary, fontFamily: fonts.semiBold }]} numberOfLines={1}>{item.tag}</Text>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={[st.bAmt, { color: colors.text, fontFamily: fonts.bold }]}>{formatRupiah(item.total)}</Text>
+                      <Text style={{ color: colors.textTertiary, fontSize: 10, fontFamily: fonts.regular, marginTop: 2 }}>{item.count} transaksi</Text>
+                    </View>
                   </View>
                 ))}
               </View>

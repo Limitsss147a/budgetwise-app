@@ -100,6 +100,12 @@ def generate_recovery_key() -> str:
     return "BDGT-" + "-".join(''.join(random.choices("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", k=4)) for _ in range(2))
 
 
+def extract_tags(text: str) -> list[str]:
+    if not text:
+        return []
+    return [match.strip("#").lower() for match in re.findall(r'#\w+', text)]
+
+
 async def get_current_user(request: Request) -> dict:
     token = request.headers.get("Authorization", "").replace("Bearer ", "")
     if not token:
@@ -734,7 +740,7 @@ async def get_transaction(tid: str, user: dict = Depends(get_current_user)):
 @api_router.post("/transactions")
 async def create_transaction(data: TransactionCreate, user: dict = Depends(get_current_user)):
     now = datetime.now(timezone.utc).isoformat()
-    d = {"id": str(uuid.uuid4()), **data.model_dump(), "user_id": user["id"], "created_at": now, "updated_at": now}
+    d = {"id": str(uuid.uuid4()), **data.model_dump(), "user_id": user["id"], "tags": extract_tags(data.description), "created_at": now, "updated_at": now}
     await db.transactions.insert_one(d)
     d.pop("_id", None)
     return d
@@ -746,6 +752,8 @@ async def update_transaction(tid: str, data: TransactionUpdate, user: dict = Dep
     if not e:
         raise HTTPException(404, "Tidak ditemukan")
     upd = {k: v for k, v in data.model_dump().items() if v is not None}
+    if "description" in upd:
+        upd["tags"] = extract_tags(upd["description"])
     upd["updated_at"] = datetime.now(timezone.utc).isoformat()
     await db.transactions.update_one({"id": tid}, {"$set": upd})
     return await db.transactions.find_one({"id": tid}, {"_id": 0})
@@ -790,6 +798,23 @@ async def delete_budget(bid: str, user: dict = Depends(get_current_user)):
     return {"message": "Dihapus"}
 
 # ==================== Analytics ====================
+
+
+@api_router.get("/analytics/tags")
+async def get_tags_analytics(month: Optional[str] = None, user: dict = Depends(get_current_user)):
+    q = {"user_id": user["id"], "type": "expense"}
+    if month:
+        q["date"] = month_range_query(month)
+    
+    pipeline = [
+        {"$match": q},
+        {"$unwind": "$tags"},
+        {"$group": {"_id": "$tags", "total": {"$sum": "$amount"}, "count": {"$sum": 1}}},
+        {"$sort": {"total": -1}},
+        {"$limit": 20}
+    ]
+    results = await db.transactions.aggregate(pipeline).to_list(20)
+    return [{"tag": r["_id"], "total": r["total"], "count": r["count"]} for r in results]
 
 
 @api_router.get("/analytics/summary")

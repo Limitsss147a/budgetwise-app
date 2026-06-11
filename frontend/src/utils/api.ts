@@ -89,6 +89,7 @@ export const api = {
   deleteBudget: (id: string): Promise<{message: string}> => request(`/api/budgets/${id}`, { method: 'DELETE' }),
 
   getSummary: (month?: string): Promise<Summary> => request(`/api/analytics/summary${month ? `?month=${month}` : ''}`),
+  getTagsAnalytics: (month?: string): Promise<any[]> => request(`/api/analytics/tags${month ? `?month=${month}` : ''}`),
   getCategoryBreakdown: (month?: string, type?: string): Promise<{breakdown: CategoryBreakdown[], total: number}> => {
     const p = new URLSearchParams(); if (month) p.set('month', month); if (type) p.set('type', type);
     return request(`/api/analytics/category-breakdown${p.toString() ? `?${p}` : ''}`);

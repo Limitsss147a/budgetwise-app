@@ -88,6 +88,17 @@ export default function Transactions() {
     });
   }, [transactions, search, categories]);
 
+  const renderDescriptionWithTags = (desc: string) => {
+    if (!desc) return null;
+    const parts = desc.split(/(#\w+)/g);
+    return parts.map((part, i) => {
+      if (part.startsWith('#')) {
+        return <Text key={i} style={{ color: colors.brand, fontFamily: fonts.semiBold }}>{part}</Text>;
+      }
+      return <Text key={i}>{part}</Text>;
+    });
+  };
+
   const renderItem = ({ item: tx }: { item: Transaction }) => {
     const cat = catMap(tx.category_id);
     const renderRightActions = () => (
@@ -122,7 +133,9 @@ export default function Transactions() {
               <View style={st.txInfo}>
                 <Text style={[st.txName, { color: colors.text, fontFamily: fonts.medium }]} numberOfLines={1}>{cat?.name || 'Lainnya'}</Text>
                 {tx.description ? (
-                  <Text style={[st.txDesc, { color: colors.textSecondary, fontFamily: fonts.regular }]} numberOfLines={1}>{tx.description}</Text>
+                  <Text style={[st.txDesc, { color: colors.textSecondary, fontFamily: fonts.regular }]} numberOfLines={1}>
+                    {renderDescriptionWithTags(tx.description)}
+                  </Text>
                 ) : null}
                 <Text style={[st.txDate, { color: colors.textTertiary, fontFamily: fonts.regular }]}>{formatDate(tx.date)}</Text>
               </View>

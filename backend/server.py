@@ -969,10 +969,20 @@ async def contribute_goal(gid: str, data: GoalContribute, user: dict = Depends(g
     w = await db.wallets.find_one({"id": data.wallet_id, "user_id": user["id"]})
     if not w:
         raise HTTPException(404, "Wallet tidak ditemukan")
-    if w["balance"] < data.amount:
+    
+    pipe = [
+        {"$match": {"user_id": user["id"], "wallet_id": data.wallet_id}},
+        {"$group": {"_id": "$type", "total": {"$sum": "$amount"}}}
+    ]
+    res = await db.transactions.aggregate(pipe).to_list(10)
+    inc = sum(r["total"] for r in res if r["_id"] in ("income", "transfer_in"))
+    exp = sum(r["total"] for r in res if r["_id"] in ("expense", "transfer_out"))
+    current_balance = w.get("initial_balance", 0.0) + inc - exp
+
+    if current_balance < data.amount:
         raise HTTPException(400, "Saldo wallet tidak cukup")
     now = datetime.now(timezone.utc).isoformat()
-    await db.wallets.update_one({"id": data.wallet_id}, {"$inc": {"balance": -data.amount}, "$set": {"updated_at": now}})
+    await db.wallets.update_one({"id": data.wallet_id}, {"$set": {"updated_at": now}})
     await db.goals.update_one({"id": gid}, {"$inc": {"current_amount": data.amount}, "$set": {"updated_at": now}})
     tx = {
         "id": str(uuid.uuid4()),

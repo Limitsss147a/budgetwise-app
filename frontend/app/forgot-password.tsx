@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Toast from 'react-native-toast-message';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../src/contexts/ThemeContext';
@@ -18,12 +19,12 @@ export default function ForgotPasswordScreen() {
 
   const handleReset = async () => {
     if (!email.trim() || !recoveryKey.trim() || !newPassword.trim()) {
-      Alert.alert('Peringatan', 'Semua kolom wajib diisi');
+      Toast.show({ type: 'error', text1: 'Peringatan', text2: 'Semua kolom wajib diisi' });
       return;
     }
 
     if (newPassword.length < 8) {
-      Alert.alert('Peringatan', 'Password baru minimal 8 karakter');
+      Toast.show({ type: 'error', text1: 'Peringatan', text2: 'Password baru minimal 8 karakter' });
       return;
     }
 
@@ -34,13 +35,16 @@ export default function ForgotPasswordScreen() {
         recovery_key: recoveryKey.trim(), 
         new_password: newPassword 
       });
-      Alert.alert(
-        'Berhasil', 
-        'Password Anda telah berhasil direset. Silakan login menggunakan password baru.',
-        [{ text: 'OK', onPress: () => router.back() }]
-      );
+      Toast.show({
+        type: 'success',
+        text1: 'Berhasil',
+        text2: 'Password Anda telah berhasil direset. Silakan login.',
+      });
+      setTimeout(() => {
+        router.back();
+      }, 1000);
     } catch (e: any) {
-      Alert.alert('Gagal', e.message || 'Gagal mereset password');
+      Toast.show({ type: 'error', text1: 'Gagal', text2: e.message || 'Gagal mereset password' });
     } finally {
       setLoading(false);
     }

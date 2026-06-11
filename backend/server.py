@@ -96,6 +96,10 @@ def create_refresh_token(user_id: str) -> str:
     return jwt.encode({"sub": user_id, "exp": datetime.now(timezone.utc) + timedelta(days=30), "type": "refresh"}, JWT_SECRET, algorithm=JWT_ALG)
 
 
+def generate_recovery_key() -> str:
+    return "BDGT-" + "-".join(''.join(random.choices("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", k=4)) for _ in range(2))
+
+
 async def get_current_user(request: Request) -> dict:
     token = request.headers.get("Authorization", "").replace("Bearer ", "")
     if not token:
@@ -125,6 +129,12 @@ class AuthRegister(BaseModel):
 class AuthLogin(BaseModel):
     email: str
     password: str
+
+
+class ForgotPassword(BaseModel):
+    email: str
+    recovery_key: str
+    new_password: str
 
 
 class CategoryCreate(BaseModel):
@@ -434,7 +444,8 @@ async def register(request: Request, data: AuthRegister):
         raise HTTPException(400, "Email sudah terdaftar")
     user_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
-    await db.users.insert_one({"id": user_id, "email": email, "password_hash": hash_password(data.password), "name": name, "role": "user", "created_at": now})
+    recovery_key = generate_recovery_key()
+    await db.users.insert_one({"id": user_id, "email": email, "password_hash": hash_password(data.password), "recovery_key_hash": hash_password(recovery_key), "name": name, "role": "user", "created_at": now})
     await db.settings.insert_one({"user_id": user_id, "currency": "IDR", "theme": "light", "pin_hash": ""})
     
     # Create default wallet for new user
@@ -451,7 +462,7 @@ async def register(request: Request, data: AuthRegister):
         "updated_at": now
     })
     
-    return {"user": {"id": user_id, "email": email, "name": data.name.strip(), "role": "user"}, "access_token": create_access_token(user_id, email), "refresh_token": create_refresh_token(user_id)}
+    return {"user": {"id": user_id, "email": email, "name": data.name.strip(), "role": "user"}, "access_token": create_access_token(user_id, email), "refresh_token": create_refresh_token(user_id), "recovery_key": recovery_key}
 
 
 @api_router.post("/auth/login")
@@ -483,6 +494,35 @@ async def refresh_token(request: Request):
         return {"access_token": create_access_token(user["id"], user["email"])}
     except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
         raise HTTPException(401, "Token expired")
+
+
+@api_router.post("/auth/forgot-password")
+@limiter.limit("5/minute")
+async def forgot_password(request: Request, data: ForgotPassword):
+    email = data.email.lower().strip()
+    user = await db.users.find_one({"email": email})
+    if not user:
+        raise HTTPException(400, "Email atau Recovery Key salah")
+    if "recovery_key_hash" not in user:
+        raise HTTPException(400, "Akun ini belum memiliki recovery key. Tidak bisa di-reset.")
+    
+    rk = data.recovery_key.upper().strip()
+    if not verify_password(rk, user["recovery_key_hash"]):
+        raise HTTPException(400, "Email atau Recovery Key salah")
+    
+    if len(data.new_password) < 8 or not re.search(r"[A-Za-z]", data.new_password) or not re.search(r"\d", data.new_password):
+        raise HTTPException(400, "Password baru minimal 8 karakter dan mengandung huruf serta angka")
+    
+    await db.users.update_one({"id": user["id"]}, {"$set": {"password_hash": hash_password(data.new_password)}})
+    return {"message": "Password berhasil diubah"}
+
+
+@api_router.post("/auth/recovery-key/generate")
+@limiter.limit("5/minute")
+async def generate_new_recovery_key(request: Request, user: dict = Depends(get_current_user)):
+    new_key = generate_recovery_key()
+    await db.users.update_one({"id": user["id"]}, {"$set": {"recovery_key_hash": hash_password(new_key)}})
+    return {"recovery_key": new_key, "message": "Recovery key baru berhasil dibuat"}
 
 # ==================== Health ====================
 

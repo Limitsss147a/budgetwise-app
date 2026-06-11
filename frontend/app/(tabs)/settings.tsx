@@ -291,6 +291,28 @@ export default function SettingsScreen() {
     }
   };
 
+  const handleGenerateRecoveryKey = async () => {
+    Alert.alert(
+      'Generate Recovery Key Baru', 
+      'Apakah Anda yakin? Jika Anda melakukan ini, Recovery Key lama Anda akan hangus. Anda harus segera mencatat Recovery Key yang baru.',
+      [
+        { text: 'Batal', style: 'cancel' },
+        { text: 'Generate', style: 'destructive', onPress: async () => {
+          try {
+            const res = await api.generateRecoveryKey();
+            Alert.alert(
+              'PENTING: Simpan Recovery Key Ini!',
+              `Recovery Key Baru:\n\n${res.recovery_key}\n\nKunci ini HANYA DITAMPILKAN SEKALI INI SAJA. Segera simpan di tempat yang aman.`,
+              [{ text: 'Sudah Saya Simpan' }]
+            );
+          } catch (e: any) {
+            Toast.show({ type: 'error', text1: 'Gagal generate key', text2: e.message });
+          }
+        }}
+      ]
+    );
+  };
+
   if (loading) {
     return <SafeAreaView style={[st.container, { backgroundColor: colors.bg }]}><View style={st.center}><ActivityIndicator size="large" color={colors.brand} /></View></SafeAreaView>;
   }
@@ -457,6 +479,13 @@ export default function SettingsScreen() {
                 </>
               )}
             </View>
+
+            <View style={[st.divider, { backgroundColor: colors.border }]} />
+            <TouchableOpacity style={st.settingRow} onPress={handleGenerateRecoveryKey}>
+              <Ionicons name="key-outline" size={20} color={colors.brand} />
+              <Text style={[st.settingLabel, { color: colors.text, fontFamily: fonts.medium }]}>Generate Recovery Key</Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
+            </TouchableOpacity>
           </View>
         </View>
 

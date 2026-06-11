@@ -121,7 +121,10 @@ export default function Transactions() {
               </View>
               <View style={st.txInfo}>
                 <Text style={[st.txName, { color: colors.text, fontFamily: fonts.medium }]} numberOfLines={1}>{cat?.name || 'Lainnya'}</Text>
-                <Text style={[st.txDesc, { color: colors.textTertiary, fontFamily: fonts.regular }]} numberOfLines={1}>{tx.description || formatDate(tx.date)}</Text>
+                {tx.description ? (
+                  <Text style={[st.txDesc, { color: colors.textSecondary, fontFamily: fonts.regular }]} numberOfLines={1}>{tx.description}</Text>
+                ) : null}
+                <Text style={[st.txDate, { color: colors.textTertiary, fontFamily: fonts.regular }]}>{formatDate(tx.date)}</Text>
               </View>
               <View style={st.txRight}>
                 <Text style={[st.txAmt, { color: (tx.type === 'income' || tx.type === 'transfer_in') ? '#4ADE80' : '#FB7185', fontFamily: fonts.bold }]}>
@@ -238,9 +241,10 @@ const st = StyleSheet.create({
   list: { paddingHorizontal: 20, paddingBottom: 120 },
   txRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1 },
   txIcon: { width: 42, height: 42, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-  txInfo: { flex: 1 },
-  txName: { fontSize: 14 },
-  txDesc: { fontSize: 12, marginTop: 2 },
+  txInfo: { flex: 1, paddingRight: 8 },
+  txName: { fontSize: 15 },
+  txDesc: { fontSize: 13, marginTop: 2 },
+  txDate: { fontSize: 11, marginTop: 4 },
   txRight: { alignItems: 'flex-end', justifyContent: 'center', gap: 6 },
   txAmt: { fontSize: 14 },
   glassWrapper: { borderRadius: 16, overflow: 'hidden', marginBottom: 12, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8 },

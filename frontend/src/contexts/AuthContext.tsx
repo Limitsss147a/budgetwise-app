@@ -9,13 +9,13 @@ interface AuthContextType {
   token: string | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (name: string, email: string, password: string) => Promise<void>;
+  register: (name: string, email: string, password: string) => Promise<string>;
   logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null, token: null, isLoading: true,
-  login: async () => {}, register: async () => {}, logout: async () => {},
+  login: async () => {}, register: async () => "", logout: async () => {},
 });
 
 const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
@@ -84,6 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAuthToken(data.access_token);
     setRefreshToken(data.refresh_token);
     setUser(data.user); setToken(data.access_token);
+    return data.recovery_key;
   };
 
   const logout = async () => {

@@ -37,7 +37,14 @@ export default function RegisterScreen() {
     if (!/[A-Za-z]/.test(password) || !/\d/.test(password)) { setError('Password harus mengandung huruf dan angka'); return; }
     if (password !== confirmPassword) { setError('Konfirmasi password tidak cocok'); return; }
     setLoading(true); setError('');
-    try { await register(name.trim(), email.trim(), password); }
+    try { 
+      const recoveryKey = await register(name.trim(), email.trim(), password); 
+      Alert.alert(
+        "PENTING: Simpan Recovery Key Anda!", 
+        `Recovery Key Anda adalah:\n\n${recoveryKey}\n\nKunci ini HANYA DITAMPILKAN SEKALI INI SAJA. Jika Anda lupa password, ini adalah satu-satunya cara untuk memulihkan akun Anda!`,
+        [{ text: "Saya Sudah Menyimpannya" }]
+      );
+    }
     catch (e: any) { setError(e.message || 'Registrasi gagal'); }
     finally { setLoading(false); }
   };

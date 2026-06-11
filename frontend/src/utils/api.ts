@@ -123,4 +123,7 @@ export const api = {
   updateWallet: (id: string, data: Partial<Wallet>): Promise<Wallet> => request(`/api/wallets/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteWallet: (id: string): Promise<{message: string}> => request(`/api/wallets/${id}`, { method: 'DELETE' }),
   transferBalance: (data: { from_wallet_id: string, to_wallet_id: string, amount: number, description?: string, date: string }): Promise<{message: string}> => request('/api/wallets/transfer', { method: 'POST', body: JSON.stringify(data) }),
+  
+  forgotPassword: (data: { email: string, recovery_key: string, new_password: string }): Promise<{message: string}> => request('/api/auth/forgot-password', { method: 'POST', body: JSON.stringify(data) }),
+  generateRecoveryKey: (): Promise<{recovery_key: string, message: string}> => request('/api/auth/recovery-key/generate', { method: 'POST' }),
 };

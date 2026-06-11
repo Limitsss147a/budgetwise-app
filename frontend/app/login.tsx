@@ -113,6 +113,12 @@ export default function LoginScreen() {
                   </TouchableOpacity>
                 </View>
 
+                <View style={{ alignItems: 'flex-end', marginTop: 12 }}>
+                  <TouchableOpacity onPress={() => router.push('/forgot-password')}>
+                    <Text style={{ color: '#10B981', fontSize: 13, fontFamily: fonts.medium }}>Lupa Password?</Text>
+                  </TouchableOpacity>
+                </View>
+
                 {/* Submit */}
                 <TouchableOpacity
                   testID="login-submit-button"

@@ -190,20 +190,23 @@ export default function Dashboard() {
           </View>
 
           {/* Goals Quick Link */}
-          <View style={{ marginHorizontal: 20, marginBottom: 24 }}>
-            <TouchableOpacity 
-              style={{ backgroundColor: colors.bgCard, padding: 16, borderRadius: 16, borderWidth: 1, borderColor: colors.border, flexDirection: 'row', alignItems: 'center' }}
-              onPress={() => router.push('/goals' as any)}
-            >
-              <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: 'rgba(16,185,129,0.1)', justifyContent: 'center', alignItems: 'center', marginRight: 14 }}>
-                <Ionicons name="flag" size={22} color="#10B981" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ color: colors.text, fontSize: 16, fontFamily: fonts.semiBold }}>Target Tabungan</Text>
-                <Text style={{ color: colors.textTertiary, fontSize: 13, fontFamily: fonts.regular, marginTop: 2 }}>Wujudkan rencana finansial Anda</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color={colors.textTertiary} />
-            </TouchableOpacity>
+          <View style={[s.glassWrapper, { marginHorizontal: 20, marginBottom: 24 }]}>
+            <BlurView intensity={theme === 'dark' ? 20 : 60} tint={theme === 'dark' ? 'dark' : 'light'} style={s.glassCard}>
+              <TouchableOpacity 
+                style={{ padding: 16, borderRadius: 16, borderWidth: 1, borderColor: colors.border, flexDirection: 'row', alignItems: 'center' }}
+                onPress={() => router.push('/goals' as any)}
+                activeOpacity={0.7}
+              >
+                <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: 'rgba(16,185,129,0.1)', justifyContent: 'center', alignItems: 'center', marginRight: 14 }}>
+                  <Ionicons name="flag" size={22} color="#10B981" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: colors.text, fontSize: 16, fontFamily: fonts.semiBold }}>Target Tabungan</Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: 13, fontFamily: fonts.regular, marginTop: 2 }}>Wujudkan rencana finansial Anda</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.textTertiary} />
+              </TouchableOpacity>
+            </BlurView>
           </View>
 
           {/* Regular Cards with Glass Effect */}

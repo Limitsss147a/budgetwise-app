@@ -43,6 +43,9 @@ export default function Dashboard() {
       ]);
       setSummary(s); setBreakdown(b.breakdown); setDailyTrend(t);
       setRecentTx(tx.transactions); setCategories(c); setWallets(walls);
+      
+      // Process recurring transactions in background
+      api.processRecurring().catch(e => console.log('Recurring process error:', e));
     } catch (e: any) {
       console.error('[Dashboard] load error', e);
       setLoadError(e?.message || 'Gagal memuat data');

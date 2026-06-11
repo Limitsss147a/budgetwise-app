@@ -94,6 +94,11 @@ export const api = {
   deleteGoal: (id: string): Promise<{message: string}> => request(`/api/goals/${id}`, { method: 'DELETE' }),
   contributeGoal: (id: string, data: { wallet_id: string, amount: number }): Promise<{message: string, goal: any}> => request(`/api/goals/${id}/contribute`, { method: 'POST', body: JSON.stringify(data) }),
 
+  getRecurring: (): Promise<any[]> => request('/api/recurring'),
+  updateRecurring: (id: string, data: any): Promise<any> => request(`/api/recurring/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteRecurring: (id: string): Promise<{message: string}> => request(`/api/recurring/${id}`, { method: 'DELETE' }),
+  processRecurring: (): Promise<{message: string, count: number}> => request('/api/recurring/process', { method: 'POST' }),
+
   getSummary: (month?: string): Promise<Summary> => request(`/api/analytics/summary${month ? `?month=${month}` : ''}`),
   getTagsAnalytics: (month?: string): Promise<any[]> => request(`/api/analytics/tags${month ? `?month=${month}` : ''}`),
   getCategoryBreakdown: (month?: string, type?: string): Promise<{breakdown: CategoryBreakdown[], total: number}> => {

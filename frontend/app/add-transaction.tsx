@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Alert, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -30,6 +30,9 @@ export default function AddTransaction() {
   const [formError, setFormError] = useState('');
   const [wallets, setWallets] = useState<any[]>([]);
   const [walletId, setWalletId] = useState('');
+  
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [recurringFrequency, setRecurringFrequency] = useState('monthly');
 
   useEffect(() => {
     const init = async () => {
@@ -72,11 +75,15 @@ export default function AddTransaction() {
 
     setLoading(true);
     try {
-      const data = {
+      const data: any = {
         type, amount: amt, category_id: categoryId,
         wallet_id: walletId,
         description, date: date.toISOString(),
       };
+      if (!isEdit && isRecurring) {
+        data.recurring_frequency = recurringFrequency;
+      }
+      
       if (isEdit) await api.updateTransaction(id!, data);
       else await api.createTransaction(data);
       
@@ -185,6 +192,53 @@ export default function AddTransaction() {
           <TextInput testID="description-input" style={[st.descInput, { backgroundColor: colors.bgCard, color: colors.text, borderColor: colors.border, fontFamily: fonts.regular }]} placeholder="Contoh: Makan siang di kantin"
             value={description} onChangeText={setDescription} multiline placeholderTextColor={colors.textTertiary} />
 
+          {!isEdit && (
+            <View style={[st.recurringWrap, { backgroundColor: colors.bgCard, borderColor: colors.border }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <View style={[st.catIconBg, { backgroundColor: 'rgba(59,130,246,0.1)', width: 36, height: 36, marginBottom: 0 }]}>
+                    <Ionicons name="repeat" size={20} color="#3B82F6" />
+                  </View>
+                  <View>
+                    <Text style={{ color: colors.text, fontFamily: fonts.semiBold, fontSize: 14 }}>Buat Transaksi Rutin</Text>
+                    <Text style={{ color: colors.textTertiary, fontFamily: fonts.regular, fontSize: 11, marginTop: 2 }}>Catat otomatis secara berkala</Text>
+                  </View>
+                </View>
+                <Switch
+                  value={isRecurring}
+                  onValueChange={setIsRecurring}
+                  trackColor={{ false: colors.border, true: colors.brand }}
+                  thumbColor="#FFF"
+                />
+              </View>
+              {isRecurring && (
+                <View style={{ marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: colors.border }}>
+                  <Text style={[st.label, { color: colors.textTertiary, fontFamily: fonts.semiBold, marginBottom: 12 }]}>Frekuensi Pengulangan</Text>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    {['daily', 'weekly', 'monthly', 'yearly'].map(f => (
+                      <TouchableOpacity
+                        key={f}
+                        style={[
+                          st.freqBtn, 
+                          { backgroundColor: colors.bgSecondary, borderColor: colors.border },
+                          recurringFrequency === f && { backgroundColor: colors.brand + '15', borderColor: colors.brand }
+                        ]}
+                        onPress={() => setRecurringFrequency(f)}
+                      >
+                        <Text style={[
+                          { color: colors.textSecondary, fontFamily: fonts.medium, fontSize: 12 },
+                          recurringFrequency === f && { color: colors.brand, fontFamily: fonts.bold }
+                        ]}>
+                          {f === 'daily' ? 'Harian' : f === 'weekly' ? 'Mingguan' : f === 'monthly' ? 'Bulanan' : 'Tahunan'}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              )}
+            </View>
+          )}
+
           {formError ? <Text style={[st.errorText, { color: '#FB7185', fontFamily: fonts.medium }]}>{formError}</Text> : null}
 
           <TouchableOpacity testID="save-transaction-btn" style={[st.saveBtn, { backgroundColor: colors.brand }, loading && st.saveBtnDisabled]}
@@ -233,6 +287,8 @@ const st = StyleSheet.create({
   dateText: { fontSize: 15 },
   errorText: { textAlign: 'center', marginBottom: 16, fontSize: 14 },
   descInput: { borderRadius: 12, padding: 14, fontSize: 14, minHeight: 60, textAlignVertical: 'top', borderWidth: 1, marginBottom: 24 },
+  recurringWrap: { padding: 16, borderRadius: 16, borderWidth: 1, marginBottom: 24 },
+  freqBtn: { flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: 10, borderWidth: 1 },
   saveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: 14, paddingVertical: 16, gap: 8 },
   saveBtnDisabled: { opacity: 0.6 },
   saveBtnText: { fontSize: 16, color: '#FFF' },

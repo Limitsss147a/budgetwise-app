@@ -83,15 +83,9 @@ export async function scheduleWeeklyReport(day: number, hour: number): Promise<s
   await cancelWeeklyReport();
 
   try {
-    // Fetch weekly report data for notification content
-    let reportBody = 'Tap untuk melihat ringkasan keuangan mingguanmu';
-    try {
-      const report = await api.getWeeklyReport();
-      const formatRp = (n: number) => 'Rp ' + n.toLocaleString('id-ID');
-      reportBody = `Pengeluaran: ${formatRp(report.total_expense)} | Pemasukan: ${formatRp(report.total_income)} | Saldo: ${report.net >= 0 ? '+' : ''}${formatRp(report.net)}`;
-    } catch {
-      // Use default message if report fetch fails
-    }
+    // Gunakan pesan statis karena notifikasi lokal berulang (WEEKLY trigger) 
+    // akan selalu menggunakan data saat pertama kali dijadwalkan jika kita memasukkan angka spesifik.
+    const reportBody = 'Laporan keuangan mingguanmu sudah tersedia. Yuk cek ringkasan pengeluaran dan pemasukanmu minggu ini! 📊';
 
     // Schedule weekly recurring notification
     const id = await Notifications.scheduleNotificationAsync({

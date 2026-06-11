@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
-  ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView,
+  ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Modal, Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -27,6 +27,7 @@ export default function RegisterScreen() {
   const [emailFocus, setEmailFocus] = useState(false);
   const [pwFocus, setPwFocus] = useState(false);
   const [confirmFocus, setConfirmFocus] = useState(false);
+  const [newRecoveryKey, setNewRecoveryKey] = useState('');
 
   const EMAIL_RE = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
 
@@ -39,11 +40,7 @@ export default function RegisterScreen() {
     setLoading(true); setError('');
     try { 
       const recoveryKey = await register(name.trim(), email.trim(), password); 
-      Alert.alert(
-        "PENTING: Simpan Recovery Key Anda!", 
-        `Recovery Key Anda adalah:\n\n${recoveryKey}\n\nKunci ini HANYA DITAMPILKAN SEKALI INI SAJA. Jika Anda lupa password, ini adalah satu-satunya cara untuk memulihkan akun Anda!`,
-        [{ text: "Saya Sudah Menyimpannya" }]
-      );
+      setNewRecoveryKey(recoveryKey);
     }
     catch (e: any) { setError(e.message || 'Registrasi gagal'); }
     finally { setLoading(false); }
@@ -202,6 +199,43 @@ export default function RegisterScreen() {
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
+
+      {/* Recovery Key Modal */}
+      <Modal visible={!!newRecoveryKey} transparent animationType="fade">
+        <View style={s.modalOverlay}>
+          <View style={[s.modalCard, { backgroundColor: isDark ? '#1F2937' : '#FFFFFF', borderColor: isDark ? '#374151' : '#E5E7EB' }]}>
+            <View style={{ alignItems: 'center', marginBottom: 16 }}>
+              <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: 'rgba(16,185,129,0.12)', justifyContent: 'center', alignItems: 'center', marginBottom: 12 }}>
+                <Ionicons name="key-outline" size={26} color="#10B981" />
+              </View>
+              <Text style={{ fontSize: 20, fontFamily: fonts.bold, color: isDark ? '#FFF' : '#111827', textAlign: 'center' }}>
+                PENTING: Simpan Kunci Ini
+              </Text>
+              
+              <View style={{ width: '100%', marginTop: 12 }}>
+                <Text style={{ color: isDark ? '#9CA3AF' : '#6B7280', fontFamily: fonts.regular, fontSize: 13, textAlign: 'center', marginBottom: 12 }}>
+                  Ini adalah Recovery Key Anda. Kunci ini HANYA DITAMPILKAN SEKALI INI SAJA. Segera simpan di tempat yang aman. Jika Anda lupa password, ini adalah satu-satunya cara memulihkannya.
+                </Text>
+                <View style={{ backgroundColor: isDark ? '#374151' : '#F3F4F6', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: isDark ? '#4B5563' : '#E5E7EB' }}>
+                  <Text selectable={true} style={{ color: isDark ? '#FFF' : '#111827', fontFamily: fonts.bold, fontSize: 18, textAlign: 'center', letterSpacing: 2 }}>
+                    {newRecoveryKey}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={{ backgroundColor: '#10B981', height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginTop: 12 }}
+              onPress={() => {
+                setNewRecoveryKey('');
+                router.replace('/(tabs)');
+              }}
+            >
+              <Text style={{ color: '#FFF', fontSize: 15, fontFamily: fonts.semiBold }}>Saya Sudah Menyimpannya</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -253,4 +287,7 @@ const s = StyleSheet.create({
   footerRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 24 },
   footerText: { fontSize: 14, color: 'rgba(255,255,255,0.5)' },
   footerLink: { fontSize: 14, color: '#10B981' },
+
+  modalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20, backgroundColor: 'rgba(0,0,0,0.6)' },
+  modalCard: { width: '100%', maxWidth: 340, borderRadius: 20, padding: 24, borderWidth: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.15, shadowRadius: 20, elevation: 15 },
 });

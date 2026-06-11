@@ -38,6 +38,9 @@ export default function SettingsScreen() {
   const [restoring, setRestoring] = useState(false);
   const [restoreData, setRestoreData] = useState<any>(null);
   const [showRestoreConfirm, setShowRestoreConfirm] = useState(false);
+  const [showGenerateKeyModal, setShowGenerateKeyModal] = useState(false);
+  const [generatingKey, setGeneratingKey] = useState(false);
+  const [newRecoveryKey, setNewRecoveryKey] = useState('');
 
   const loadSettings = useCallback(async () => {
     try {
@@ -291,26 +294,22 @@ export default function SettingsScreen() {
     }
   };
 
-  const handleGenerateRecoveryKey = async () => {
-    Alert.alert(
-      'Generate Recovery Key Baru', 
-      'Apakah Anda yakin? Jika Anda melakukan ini, Recovery Key lama Anda akan hangus. Anda harus segera mencatat Recovery Key yang baru.',
-      [
-        { text: 'Batal', style: 'cancel' },
-        { text: 'Generate', style: 'destructive', onPress: async () => {
-          try {
-            const res = await api.generateRecoveryKey();
-            Alert.alert(
-              'PENTING: Simpan Recovery Key Ini!',
-              `Recovery Key Baru:\n\n${res.recovery_key}\n\nKunci ini HANYA DITAMPILKAN SEKALI INI SAJA. Segera simpan di tempat yang aman.`,
-              [{ text: 'Sudah Saya Simpan' }]
-            );
-          } catch (e: any) {
-            Toast.show({ type: 'error', text1: 'Gagal generate key', text2: e.message });
-          }
-        }}
-      ]
-    );
+  const handleGenerateRecoveryKey = () => {
+    setShowGenerateKeyModal(true);
+    setNewRecoveryKey('');
+  };
+
+  const confirmGenerateKey = async () => {
+    setGeneratingKey(true);
+    try {
+      const res = await api.generateRecoveryKey();
+      setNewRecoveryKey(res.recovery_key);
+    } catch (e: any) {
+      Toast.show({ type: 'error', text1: 'Gagal generate key', text2: e.message });
+      setShowGenerateKeyModal(false);
+    } finally {
+      setGeneratingKey(false);
+    }
   };
 
   if (loading) {
@@ -645,6 +644,72 @@ export default function SettingsScreen() {
                   <Text style={[st.confirmBtnText, { color: '#FFF', fontFamily: fonts.semiBold }]}>Restore</Text>
                 )}
               </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Generate Recovery Key Modal */}
+      <Modal visible={showGenerateKeyModal} transparent animationType="fade" onRequestClose={() => !generatingKey && setShowGenerateKeyModal(false)}>
+        <View style={st.modalOverlay}>
+          <Pressable style={st.modalBackdrop} onPress={() => !generatingKey && setShowGenerateKeyModal(false)} />
+          <View style={[st.confirmDialog, { backgroundColor: colors.bgCard, borderColor: colors.border }]}>
+            <View style={{ alignItems: 'center', marginBottom: 16 }}>
+              <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: 'rgba(59,130,246,0.12)', justifyContent: 'center', alignItems: 'center', marginBottom: 12 }}>
+                <Ionicons name="key-outline" size={26} color="#3B82F6" />
+              </View>
+              <Text style={[st.confirmTitle, { color: colors.text, fontFamily: fonts.bold }]}>
+                {newRecoveryKey ? 'PENTING: Simpan Kunci Ini' : 'Generate Recovery Key'}
+              </Text>
+              
+              {!newRecoveryKey ? (
+                <Text style={{ color: colors.textSecondary, fontFamily: fonts.regular, fontSize: 14, textAlign: 'center', marginTop: 8 }}>
+                  Apakah Anda yakin? Jika Anda melakukan ini, Recovery Key lama Anda akan hangus. Anda harus segera mencatat Recovery Key yang baru.
+                </Text>
+              ) : (
+                <View style={{ width: '100%', marginTop: 12 }}>
+                  <Text style={{ color: colors.textSecondary, fontFamily: fonts.regular, fontSize: 13, textAlign: 'center', marginBottom: 12 }}>
+                    Kunci ini HANYA DITAMPILKAN SEKALI INI SAJA. Segera simpan di tempat yang aman.
+                  </Text>
+                  <View style={{ backgroundColor: colors.bgSecondary, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}>
+                    <Text selectable={true} style={{ color: colors.text, fontFamily: fonts.bold, fontSize: 18, textAlign: 'center', letterSpacing: 2 }}>
+                      {newRecoveryKey}
+                    </Text>
+                  </View>
+                </View>
+              )}
+            </View>
+
+            <View style={st.confirmActions}>
+              {!newRecoveryKey ? (
+                <>
+                  <TouchableOpacity
+                    style={[st.confirmBtn, { borderColor: colors.border, borderWidth: 1 }]}
+                    onPress={() => setShowGenerateKeyModal(false)}
+                    disabled={generatingKey}
+                  >
+                    <Text style={[st.confirmBtnText, { color: colors.textSecondary, fontFamily: fonts.semiBold }]}>Batal</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[st.confirmBtn, { backgroundColor: '#3B82F6' }]}
+                    onPress={confirmGenerateKey}
+                    disabled={generatingKey}
+                  >
+                    {generatingKey ? (
+                      <ActivityIndicator size="small" color="#FFF" />
+                    ) : (
+                      <Text style={[st.confirmBtnText, { color: '#FFF', fontFamily: fonts.semiBold }]}>Generate</Text>
+                    )}
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <TouchableOpacity
+                  style={[st.confirmBtn, { backgroundColor: colors.brand, flex: 1 }]}
+                  onPress={() => setShowGenerateKeyModal(false)}
+                >
+                  <Text style={[st.confirmBtnText, { color: '#FFF', fontFamily: fonts.semiBold }]}>Sudah Saya Simpan</Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         </View>

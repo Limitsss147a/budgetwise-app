@@ -13,6 +13,7 @@ import { BlurView } from 'expo-blur';
 import { Platform } from 'react-native';
 import type { Budget, Category, CategoryBreakdown } from '../../src/types';
 import { LoadingScreen } from '../../src/components/ui/LoadingScreen';
+import { ConfirmModal } from '../../src/components/ui/ConfirmModal';
 
 export default function BudgetScreen() {
   const { colors, theme } = useTheme();
@@ -26,6 +27,9 @@ export default function BudgetScreen() {
   const [selCat, setSelCat] = useState<string>('');
   const [budgetAmt, setBudgetAmt] = useState('');
   const [formError, setFormError] = useState('');
+  
+  const [deleteConfirmBudget, setDeleteConfirmBudget] = useState<Budget | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -56,16 +60,22 @@ export default function BudgetScreen() {
   };
 
   const handleDeleteBudget = (b: Budget) => {
-    Alert.alert('Hapus Anggaran', 'Yakin ingin menghapus anggaran ini?', [
-      { text: 'Batal', style: 'cancel' },
-      { text: 'Hapus', style: 'destructive', onPress: async () => {
-        try { 
-          await api.deleteBudget(b.id); 
-          Toast.show({ type: 'success', text1: 'Anggaran dihapus' });
-          loadData(); 
-        } catch { Toast.show({ type: 'error', text1: 'Gagal menghapus' }); }
-      }},
-    ]);
+    setDeleteConfirmBudget(b);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteConfirmBudget) return;
+    setIsDeleting(true);
+    try { 
+      await api.deleteBudget(deleteConfirmBudget.id); 
+      Toast.show({ type: 'success', text1: 'Anggaran dihapus' });
+      loadData(); 
+    } catch { 
+      Toast.show({ type: 'error', text1: 'Gagal menghapus' }); 
+    } finally {
+      setIsDeleting(false);
+      setDeleteConfirmBudget(null);
+    }
   };
 
   const handleEditBudget = (b: Budget) => {
@@ -217,6 +227,15 @@ export default function BudgetScreen() {
           </View>
         </View>
       </Modal>
+      
+      <ConfirmModal
+        visible={!!deleteConfirmBudget}
+        title="Hapus Anggaran"
+        description="Yakin ingin menghapus anggaran ini?"
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteConfirmBudget(null)}
+        loading={isDeleting}
+      />
       </SafeAreaView>
     </View>
   );

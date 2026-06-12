@@ -16,6 +16,7 @@ import { BlurView } from 'expo-blur';
 import { DonutChart } from '../../src/components/ui/DonutChart';
 import { Card, CardTitle } from '../../src/components/ui/Card';
 import { LoadingScreen } from '../../src/components/ui/LoadingScreen';
+import { ConfirmModal } from '../../src/components/ui/ConfirmModal';
 import type { Transaction, Category } from '../../src/types';
 
 export default function Transactions() {
@@ -32,6 +33,9 @@ export default function Transactions() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [showSwipeHint, setShowSwipeHint] = useState(false);
   const [search, setSearch] = useState('');
+  
+  const [deleteConfirmTx, setDeleteConfirmTx] = useState<Transaction | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const loadData = useCallback(async (p = 1, append = false) => {
     try {
@@ -60,16 +64,22 @@ export default function Transactions() {
   useFocusEffect(useCallback(() => { loadData(1); }, [loadData]));
 
   const handleDelete = (tx: Transaction) => {
-    Alert.alert('Hapus Transaksi', `Yakin ingin menghapus transaksi ${formatRupiah(tx.amount)}?`, [
-      { text: 'Batal', style: 'cancel' },
-      { text: 'Hapus', style: 'destructive', onPress: async () => {
-        try { 
-          await api.deleteTransaction(tx.id); 
-          Toast.show({ type: 'success', text1: 'Transaksi dihapus' });
-          loadData(1); 
-        } catch (e) { Toast.show({ type: 'error', text1: 'Gagal menghapus' }); }
-      }},
-    ]);
+    setDeleteConfirmTx(tx);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteConfirmTx) return;
+    setIsDeleting(true);
+    try { 
+      await api.deleteTransaction(deleteConfirmTx.id); 
+      Toast.show({ type: 'success', text1: 'Transaksi dihapus' });
+      loadData(1); 
+    } catch (e) { 
+      Toast.show({ type: 'error', text1: 'Gagal menghapus' }); 
+    } finally {
+      setIsDeleting(false);
+      setDeleteConfirmTx(null);
+    }
   };
 
   const catMap = (id: string) => categories.find(c => c.id === id);
@@ -233,6 +243,15 @@ export default function Transactions() {
               </View>
             }
           />
+          
+        <ConfirmModal
+          visible={!!deleteConfirmTx}
+          title="Hapus Transaksi"
+          description={`Yakin ingin menghapus transaksi ${deleteConfirmTx ? formatRupiah(deleteConfirmTx.amount) : ''}?`}
+          onConfirm={confirmDelete}
+          onCancel={() => setDeleteConfirmTx(null)}
+          loading={isDeleting}
+        />
       </SafeAreaView>
     </View>
   );

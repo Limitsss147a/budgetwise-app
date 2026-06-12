@@ -14,6 +14,7 @@ import { useTheme } from '../../src/contexts/ThemeContext';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { fonts } from '../../src/constants/fonts';
 import { requestNotificationPermissions, scheduleWeeklyReport, cancelWeeklyReport, sendTestNotification, getDayName } from '../../src/services/notifications';
+import { ConfirmModal } from '../../src/components/ui/ConfirmModal';
 import type { Settings } from '../../src/types';
 
 export default function SettingsScreen() {
@@ -41,6 +42,11 @@ export default function SettingsScreen() {
   const [showGenerateKeyModal, setShowGenerateKeyModal] = useState(false);
   const [generatingKey, setGeneratingKey] = useState(false);
   const [newRecoveryKey, setNewRecoveryKey] = useState('');
+
+  const [showRemovePinConfirm, setShowRemovePinConfirm] = useState(false);
+  const [isRemovingPin, setIsRemovingPin] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
 
   const loadSettings = useCallback(async () => {
     try {
@@ -85,16 +91,21 @@ export default function SettingsScreen() {
   };
 
   const handleRemovePin = () => {
-    Alert.alert('Hapus PIN', 'Yakin ingin menghapus PIN keamanan?', [
-      { text: 'Batal', style: 'cancel' },
-      { text: 'Hapus', style: 'destructive', onPress: async () => {
-        try { 
-          await api.removePin(); 
-          Toast.show({ type: 'success', text1: 'PIN dihapus' }); 
-          loadSettings(); 
-        } catch { Toast.show({ type: 'error', text1: 'Gagal menghapus PIN' }); }
-      }},
-    ]);
+    setShowRemovePinConfirm(true);
+  };
+
+  const confirmRemovePin = async () => {
+    setIsRemovingPin(true);
+    try { 
+      await api.removePin(); 
+      Toast.show({ type: 'success', text1: 'PIN dihapus' }); 
+      loadSettings(); 
+    } catch { 
+      Toast.show({ type: 'error', text1: 'Gagal menghapus PIN' }); 
+    } finally {
+      setIsRemovingPin(false);
+      setShowRemovePinConfirm(false);
+    }
   };
 
   const handleBackup = async () => {
@@ -194,16 +205,21 @@ export default function SettingsScreen() {
   };
 
   const handleReset = () => {
-    Alert.alert('Reset Data', 'PERINGATAN: Semua data akan dihapus permanen. Lanjutkan?', [
-      { text: 'Batal', style: 'cancel' },
-      { text: 'Reset', style: 'destructive', onPress: async () => {
-        try { 
-          await api.resetData(); 
-          Toast.show({ type: 'success', text1: 'Semua data telah direset' }); 
-          loadSettings(); 
-        } catch { Toast.show({ type: 'error', text1: 'Gagal mereset data' }); }
-      }},
-    ]);
+    setShowResetConfirm(true);
+  };
+
+  const confirmReset = async () => {
+    setIsResetting(true);
+    try { 
+      await api.resetData(); 
+      Toast.show({ type: 'success', text1: 'Semua data telah direset' }); 
+      loadSettings(); 
+    } catch { 
+      Toast.show({ type: 'error', text1: 'Gagal mereset data' }); 
+    } finally {
+      setIsResetting(false);
+      setShowResetConfirm(false);
+    }
   };
 
   const handleLogout = () => {
@@ -714,6 +730,24 @@ export default function SettingsScreen() {
           </View>
         </View>
       </Modal>
+
+      <ConfirmModal
+        visible={showRemovePinConfirm}
+        title="Hapus PIN"
+        description="Yakin ingin menghapus PIN keamanan?"
+        onConfirm={confirmRemovePin}
+        onCancel={() => setShowRemovePinConfirm(false)}
+        loading={isRemovingPin}
+      />
+
+      <ConfirmModal
+        visible={showResetConfirm}
+        title="Reset Data"
+        description="PERINGATAN: Semua data akan dihapus permanen. Lanjutkan?"
+        onConfirm={confirmReset}
+        onCancel={() => setShowResetConfirm(false)}
+        loading={isResetting}
+      />
     </SafeAreaView>
   );
 }

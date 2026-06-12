@@ -12,6 +12,7 @@ import { Card } from '../src/components/ui/Card';
 import { Wallet } from '../src/types';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
+import { ConfirmModal } from '../src/components/ui/ConfirmModal';
 
 const WALLET_TYPES = [
   { label: 'Bank / M-Banking', value: 'bank' as const, icon: 'card-outline' },
@@ -28,6 +29,9 @@ export default function WalletsScreen() {
   const [loading, setLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Transfer state
   const [isTransferring, setIsTransferring] = useState(false);
@@ -95,25 +99,21 @@ export default function WalletsScreen() {
   };
 
   const handleDelete = (id: string) => {
-    Alert.alert(
-      'Hapus Wallet',
-      'Apakah Anda yakin ingin menghapus wallet ini? Seluruh transaksi terkait harus dipindahkan terlebih dahulu.',
-      [
-        { text: 'Batal', style: 'cancel' },
-        { 
-          text: 'Hapus', 
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await api.deleteWallet(id);
-              loadWallets();
-            } catch (error: any) {
-              Alert.alert('Gagal', error.message);
-            }
-          }
-        }
-      ]
-    );
+    setDeleteConfirmId(id);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteConfirmId) return;
+    setIsDeleting(true);
+    try {
+      await api.deleteWallet(deleteConfirmId);
+      loadWallets();
+    } catch (error: any) {
+      Alert.alert('Gagal', error.message);
+    } finally {
+      setIsDeleting(false);
+      setDeleteConfirmId(null);
+    }
   };
 
   const handleEdit = (w: Wallet) => {
@@ -388,6 +388,15 @@ export default function WalletsScreen() {
           </BlurView>
         </View>
       </Modal>
+
+      <ConfirmModal
+        visible={!!deleteConfirmId}
+        title="Hapus Wallet"
+        description="Apakah Anda yakin ingin menghapus wallet ini? Seluruh transaksi terkait harus dipindahkan terlebih dahulu."
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteConfirmId(null)}
+        loading={isDeleting}
+      />
     </View>
   );
 }

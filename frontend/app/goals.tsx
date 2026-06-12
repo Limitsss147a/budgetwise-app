@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, RefreshControl, Platform, Modal, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, RefreshControl, Platform, Modal, TextInput, KeyboardAvoidingView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -11,6 +11,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import Toast from 'react-native-toast-message';
 import type { Goal, Wallet } from '../src/types';
+import { ConfirmModal } from '../src/components/ui/ConfirmModal';
 
 export default function GoalsScreen() {
   const router = useRouter();
@@ -24,6 +25,8 @@ export default function GoalsScreen() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showContributeModal, setShowContributeModal] = useState(false);
   const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   
   // Form state
   const [name, setName] = useState('');
@@ -87,18 +90,22 @@ export default function GoalsScreen() {
   };
 
   const handleDelete = (id: string) => {
-    Alert.alert('Hapus Target', 'Yakin ingin menghapus target tabungan ini? Riwayat transaksi tabungan akan tetap ada, namun target akan dihapus.', [
-      { text: 'Batal', style: 'cancel' },
-      { text: 'Hapus', style: 'destructive', onPress: async () => {
-        try {
-          await api.deleteGoal(id);
-          Toast.show({ type: 'success', text1: 'Target dihapus' });
-          loadData();
-        } catch {
-          Toast.show({ type: 'error', text1: 'Gagal menghapus' });
-        }
-      }}
-    ]);
+    setDeleteConfirmId(id);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteConfirmId) return;
+    setIsDeleting(true);
+    try {
+      await api.deleteGoal(deleteConfirmId);
+      Toast.show({ type: 'success', text1: 'Target dihapus' });
+      loadData();
+    } catch {
+      Toast.show({ type: 'error', text1: 'Gagal menghapus' });
+    } finally {
+      setIsDeleting(false);
+      setDeleteConfirmId(null);
+    }
   };
 
   const isDark = theme === 'dark';
@@ -194,7 +201,7 @@ export default function GoalsScreen() {
 
       {/* Modal Add Goal */}
       <Modal visible={showAddModal} transparent animationType="slide">
-        <View style={st.modalOverlay}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={st.modalOverlay}>
           <View style={[st.modalContent, { backgroundColor: colors.bgCard }]}>
             <View style={st.modalHeader}>
               <Text style={[st.modalTitle, { color: colors.text, fontFamily: fonts.bold }]}>Buat Target Baru</Text>
@@ -212,12 +219,12 @@ export default function GoalsScreen() {
               <Text style={{ color: '#FFF', fontFamily: fonts.semiBold, fontSize: 15 }}>Buat Target</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Modal Contribute */}
       <Modal visible={showContributeModal} transparent animationType="slide">
-        <View style={st.modalOverlay}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={st.modalOverlay}>
           <View style={[st.modalContent, { backgroundColor: colors.bgCard }]}>
             <View style={st.modalHeader}>
               <Text style={[st.modalTitle, { color: colors.text, fontFamily: fonts.bold }]}>Top-up Tabungan</Text>
@@ -246,8 +253,17 @@ export default function GoalsScreen() {
               <Text style={{ color: '#FFF', fontFamily: fonts.semiBold, fontSize: 15 }}>Simpan</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
+
+      <ConfirmModal
+        visible={!!deleteConfirmId}
+        title="Hapus Target"
+        description="Yakin ingin menghapus target tabungan ini? Riwayat transaksi tabungan akan tetap ada, namun target akan dihapus."
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteConfirmId(null)}
+        loading={isDeleting}
+      />
     </View>
   );
 }

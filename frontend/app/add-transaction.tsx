@@ -11,6 +11,7 @@ import type { Category, Transaction } from '../src/types';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import Toast from 'react-native-toast-message';
 import { format } from 'date-fns';
+import { ConfirmModal } from '../src/components/ui/ConfirmModal';
 
 export default function AddTransaction() {
   const router = useRouter();
@@ -33,6 +34,9 @@ export default function AddTransaction() {
   
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurringFrequency, setRecurringFrequency] = useState('monthly');
+  
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     const init = async () => {
@@ -95,18 +99,20 @@ export default function AddTransaction() {
   };
 
   const handleDelete = async () => {
-    Alert.alert('Hapus Transaksi', 'Yakin ingin menghapus transaksi ini permanently?', [
-      { text: 'Batal', style: 'cancel' },
-      { text: 'Hapus', style: 'destructive', onPress: async () => {
-        setLoading(true);
-        try {
-          await api.deleteTransaction(id!);
-          router.back();
-        } catch (e: any) {
-          Alert.alert('Error', e.message || 'Gagal menghapus');
-        } finally { setLoading(false); }
-      }}
-    ]);
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDelete = async () => {
+    setIsDeleting(true);
+    try {
+      await api.deleteTransaction(id!);
+      Toast.show({ type: 'success', text1: 'Transaksi dihapus' });
+      router.back();
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Gagal menghapus');
+      setIsDeleting(false);
+      setShowDeleteConfirm(false);
+    }
   };
 
   if (initLoading) {
@@ -260,6 +266,15 @@ export default function AddTransaction() {
           )}
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <ConfirmModal
+        visible={showDeleteConfirm}
+        title="Hapus Transaksi"
+        description="Yakin ingin menghapus transaksi ini permanen?"
+        onConfirm={confirmDelete}
+        onCancel={() => setShowDeleteConfirm(false)}
+        loading={isDeleting}
+      />
     </SafeAreaView>
   );
 }

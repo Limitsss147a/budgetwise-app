@@ -68,6 +68,9 @@ class TransactionUpdate(BaseModel):
     date: Optional[str] = None
     photo_uri: Optional[str] = None
 
+class ScanReceiptRequest(BaseModel):
+    image_base64: str
+
 class RecurringUpdate(BaseModel):
     is_active: Optional[bool] = None
     amount: Optional[float] = None

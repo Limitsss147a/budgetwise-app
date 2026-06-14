@@ -138,4 +138,5 @@ export const api = {
   
   forgotPassword: (data: { email: string, recovery_key: string, new_password: string }): Promise<{message: string}> => request('/api/auth/forgot-password', { method: 'POST', body: JSON.stringify(data) }),
   generateRecoveryKey: (): Promise<{recovery_key: string, message: string}> => request('/api/auth/recovery-key/generate', { method: 'POST' }),
+  scanReceipt: (image_base64: string): Promise<{ merchant: string, total_amount: number, date: string }> => request('/api/ocr/scan-receipt', { method: 'POST', body: JSON.stringify({ image_base64 }) }),
 };

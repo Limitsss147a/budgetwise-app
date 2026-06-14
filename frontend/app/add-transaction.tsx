@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, Switch } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, Switch, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -12,6 +12,8 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import Toast from 'react-native-toast-message';
 import { format } from 'date-fns';
 import { ConfirmModal } from '../src/components/ui/ConfirmModal';
+import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 
 export default function AddTransaction() {
   const router = useRouter();
@@ -37,6 +39,8 @@ export default function AddTransaction() {
   
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
+  const [showSourceModal, setShowSourceModal] = useState(false);
 
   useEffect(() => {
     const init = async () => {
@@ -115,6 +119,58 @@ export default function AddTransaction() {
     }
   };
 
+  const handleScanReceipt = async () => {
+    setShowSourceModal(true);
+  };
+
+  const performScan = async (fromCamera: boolean) => {
+    setShowSourceModal(false);
+    try {
+      if (fromCamera) {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Izin Ditolak', 'Aplikasi butuh izin kamera.');
+          return;
+        }
+      } else {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Izin Ditolak', 'Aplikasi butuh izin galeri foto.');
+          return;
+        }
+      }
+      
+      const result = fromCamera
+        ? await ImagePicker.launchCameraAsync({ allowsEditing: true, quality: 1 })
+        : await ImagePicker.launchImageLibraryAsync({ allowsEditing: true, quality: 1 });
+      
+      if (result.canceled) return;
+      
+      setIsScanning(true);
+      
+      const manipResult = await ImageManipulator.manipulateAsync(
+        result.assets[0].uri,
+        [{ resize: { width: 800 } }],
+        { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+      );
+      
+      if (!manipResult.base64) throw new Error("Gagal memproses gambar");
+      
+      const res = await api.scanReceipt(manipResult.base64);
+      
+      if (res.total_amount) setAmount(String(res.total_amount));
+      if (res.merchant) setDescription(res.merchant);
+      if (res.date) setDate(new Date(res.date));
+      
+      Toast.show({ type: 'success', text1: 'Struk berhasil dibaca!' });
+      
+    } catch (e: any) {
+      Alert.alert('Gagal', e.message || 'Gagal scan struk');
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
   if (initLoading) {
     return <SafeAreaView style={[st.container, { backgroundColor: colors.bg }]}><View style={st.center}><ActivityIndicator size="large" color={colors.brand} /></View></SafeAreaView>;
   }
@@ -145,10 +201,18 @@ export default function AddTransaction() {
           </View>
 
           <View style={[st.amountCard, { backgroundColor: colors.bgCard, borderColor: colors.border }]}>
-            <Text style={[st.label, { color: colors.textTertiary, fontFamily: fonts.semiBold }]}>Jumlah</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <Text style={[st.label, { color: colors.textTertiary, fontFamily: fonts.semiBold, marginBottom: 0 }]}>Jumlah</Text>
+              {!isEdit && (
+                <TouchableOpacity onPress={handleScanReceipt} disabled={isScanning} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.brand + '20', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}>
+                  {isScanning ? <ActivityIndicator size="small" color={colors.brand} /> : <Ionicons name="scan" size={14} color={colors.brand} style={{ marginRight: 4 }} />}
+                  <Text style={{ color: colors.brand, fontFamily: fonts.semiBold, fontSize: 12 }}>{isScanning ? 'Membaca...' : 'Scan Struk'}</Text>
+                </TouchableOpacity>
+              )}
+            </View>
             <View style={st.amountRow}>
               <Text style={[st.rupiah, { color: colors.text, fontFamily: fonts.semiBold }]}>Rp</Text>
-              <TextInput testID="amount-input" style={[st.amountInput, { color: colors.text, fontFamily: fonts.bold }]} keyboardType="numeric" placeholder="0"
+              <TextInput testID="amount-input" style={[st.amountInput, { color: colors.text, fontFamily: fonts.bold }, Platform.OS === 'web' && { outlineStyle: 'none' } as any]} keyboardType="numeric" placeholder="0"
                 value={formatAmountInput(amount)} onChangeText={t => { setAmount(t.replace(/\D/g, '')); if (formError) setFormError(''); }}
                 placeholderTextColor={colors.textTertiary} />
             </View>
@@ -195,7 +259,7 @@ export default function AddTransaction() {
           </View>
 
           <Text style={[st.label, { color: colors.textTertiary, fontFamily: fonts.semiBold }]}>Catatan (Opsional)</Text>
-          <TextInput testID="description-input" style={[st.descInput, { backgroundColor: colors.bgCard, color: colors.text, borderColor: colors.border, fontFamily: fonts.regular }]} placeholder="Contoh: Makan siang di kantin"
+          <TextInput testID="description-input" style={[st.descInput, { backgroundColor: colors.bgCard, color: colors.text, borderColor: colors.border, fontFamily: fonts.regular }, Platform.OS === 'web' && { outlineStyle: 'none' } as any]} placeholder="Contoh: Makan siang di kantin"
             value={description} onChangeText={setDescription} multiline placeholderTextColor={colors.textTertiary} />
 
           {!isEdit && (
@@ -275,6 +339,41 @@ export default function AddTransaction() {
         onCancel={() => setShowDeleteConfirm(false)}
         loading={isDeleting}
       />
+
+      {/* Custom Source Picker Modal */}
+      <Modal visible={showSourceModal} transparent animationType="fade" onRequestClose={() => setShowSourceModal(false)}>
+        <View style={st.modalOverlay}>
+          <TouchableOpacity style={st.modalBackdrop} activeOpacity={1} onPress={() => setShowSourceModal(false)} />
+          <View style={[st.sourceDialog, { backgroundColor: colors.bgCard, borderColor: colors.border }]}>
+            <Text style={[st.sourceTitle, { color: colors.text, fontFamily: fonts.bold }]}>Pilih Sumber Foto</Text>
+            <Text style={{ color: colors.textSecondary, fontFamily: fonts.regular, fontSize: 13, textAlign: 'center', marginBottom: 20 }}>
+              Dari mana Anda ingin mengambil foto struk belanja?
+            </Text>
+            
+            <View style={st.sourceOptions}>
+              <TouchableOpacity style={[st.sourceOptionBtn, { backgroundColor: colors.bgSecondary, borderColor: colors.border }]} onPress={() => performScan(true)}>
+                <View style={[st.sourceIconWrap, { backgroundColor: colors.brand + '15' }]}>
+                  <Ionicons name="camera" size={28} color={colors.brand} />
+                </View>
+                <Text style={[st.sourceOptionText, { color: colors.text, fontFamily: fonts.semiBold }]}>Kamera</Text>
+                <Text style={[st.sourceOptionSub, { color: colors.textTertiary, fontFamily: fonts.regular }]}>Ambil foto langsung</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={[st.sourceOptionBtn, { backgroundColor: colors.bgSecondary, borderColor: colors.border }]} onPress={() => performScan(false)}>
+                <View style={[st.sourceIconWrap, { backgroundColor: colors.accent + '15' }]}>
+                  <Ionicons name="images" size={28} color={colors.accent} />
+                </View>
+                <Text style={[st.sourceOptionText, { color: colors.text, fontFamily: fonts.semiBold }]}>Galeri</Text>
+                <Text style={[st.sourceOptionSub, { color: colors.textTertiary, fontFamily: fonts.regular }]}>Pilih dari file/album</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity style={[st.cancelSourceBtn, { borderColor: colors.border }]} onPress={() => setShowSourceModal(false)}>
+              <Text style={[st.cancelSourceText, { color: colors.textSecondary, fontFamily: fonts.semiBold }]}>Batal</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -313,4 +412,15 @@ const st = StyleSheet.create({
   walletItem: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, borderWidth: 1, gap: 8 },
   walletIcon: { width: 24, height: 24, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
   walletName: { fontSize: 14 },
+  modalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
+  modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)' },
+  sourceDialog: { width: '100%', maxWidth: 360, borderRadius: 24, padding: 24, borderWidth: 1, elevation: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.1, shadowRadius: 20 },
+  sourceTitle: { fontSize: 20, textAlign: 'center', marginBottom: 6 },
+  sourceOptions: { flexDirection: 'row', gap: 12, marginBottom: 20 },
+  sourceOptionBtn: { flex: 1, alignItems: 'center', padding: 16, borderRadius: 16, borderWidth: 1 },
+  sourceIconWrap: { width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
+  sourceOptionText: { fontSize: 15, marginBottom: 4 },
+  sourceOptionSub: { fontSize: 11, textAlign: 'center' },
+  cancelSourceBtn: { paddingVertical: 14, borderRadius: 14, borderWidth: 1, alignItems: 'center', backgroundColor: 'transparent' },
+  cancelSourceText: { fontSize: 15 },
 });

@@ -18,7 +18,7 @@ from database import limiter
 from startup import lifespan
 
 from routers import auth, wallets, categories, transactions, budgets, goals
-from routers import analytics, settings, portfolio, data
+from routers import analytics, settings, portfolio, data, ocr
 
 # ==================== App ====================
 
@@ -41,6 +41,7 @@ api_router.include_router(analytics.router)
 api_router.include_router(settings.router)
 api_router.include_router(portfolio.router)
 api_router.include_router(data.router)
+api_router.include_router(ocr.router)
 
 app.include_router(api_router)
 

@@ -358,13 +358,19 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        {/* Investasi (Moved from Tab Bar) */}
+        {/* Fitur Tambahan */}
         <View style={st.section}>
-          <Text style={[st.sectionTitle, { color: colors.textTertiary, fontFamily: fonts.semiBold }]}>Investasi</Text>
+          <Text style={[st.sectionTitle, { color: colors.textTertiary, fontFamily: fonts.semiBold }]}>Fitur Tambahan</Text>
           <View style={[st.card, { backgroundColor: colors.bgCard, borderColor: colors.border }]}>
             <TouchableOpacity testID="go-to-portfolio-btn" style={st.settingRow} onPress={() => router.push('/(tabs)/portfolio')}>
               <Ionicons name="pie-chart-outline" size={20} color={colors.brand} />
               <Text style={[st.settingLabel, { color: colors.text, fontFamily: fonts.medium }]}>Portofolio Saham</Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
+            </TouchableOpacity>
+            <View style={[st.divider, { backgroundColor: colors.border }]} />
+            <TouchableOpacity testID="go-to-tools-btn" style={st.settingRow} onPress={() => router.push('/tools' as any)}>
+              <Ionicons name="bulb-outline" size={20} color={colors.brand} />
+              <Text style={[st.settingLabel, { color: colors.text, fontFamily: fonts.medium }]}>Edukasi & Alat Finansial</Text>
               <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
             </TouchableOpacity>
           </View>

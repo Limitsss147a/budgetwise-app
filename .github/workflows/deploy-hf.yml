@@ -6,7 +6,7 @@ on:
       - main
     paths:
       - 'backend/**'
-      - 'hf-deploy/**'
+      - '.github/workflows/deploy-hf.yml'
 
 jobs:
   deploy:
@@ -15,26 +15,28 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      - name: Sync Backend Files to hf-deploy
+      - name: Prepare Hugging Face Dockerfile
         run: |
-          # Clean up old routers folder if exists to avoid stale files
-          rm -rf hf-deploy/routers
-          
-          # Copy main server files
-          cp backend/server.py hf-deploy/
-          cp backend/requirements.txt hf-deploy/
-          cp backend/database.py hf-deploy/
-          cp backend/models.py hf-deploy/
-          cp backend/auth.py hf-deploy/
-          cp backend/startup.py hf-deploy/
-          
-          # Copy modular routers directory
-          cp -r backend/routers hf-deploy/
+          # Override Dockerfile khusus untuk Hugging Face Spaces agar berjalan sbg non-root
+          # Langkah ini tidak akan merusak Dockerfile asli di repo GitHub karena hanya berjalan di Runner CI
+          cat << 'EOF' > backend/Dockerfile
+          FROM python:3.11-slim
+          RUN useradd -m -u 1000 user
+          USER user
+          ENV HOME=/home/user \
+              PATH=/home/user/.local/bin:$PATH
+          WORKDIR /app
+          COPY --chown=user requirements.txt .
+          RUN pip install --no-cache-dir --upgrade -r requirements.txt
+          COPY --chown=user . /app
+          EXPOSE 7860
+          CMD ["gunicorn", "server:app", "--worker-class", "uvicorn.workers.UvicornWorker", "--workers", "2", "--bind", "0.0.0.0:7860", "--timeout", "120", "--keep-alive", "5", "--access-logfile", "-"]
+          EOF
 
       - name: Push to Hugging Face
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           pip install -U "huggingface_hub[cli]"
-          # Gunakan hf upload dengan syntax --key=value untuk menghindari error argumen ekstra
-          hf upload mit147a/budgetwise-api ./hf-deploy . --repo-type=space --token=$HF_TOKEN --commit-message="Auto-deploy: sync backend to Hugging Face"
+          # Langsung upload folder backend tanpa perlu folder replika hf-deploy
+          hf upload mit147a/budgetwise-api ./backend . --repo-type=space --token=$HF_TOKEN --commit-message="Auto-deploy: sync backend to Hugging Face"

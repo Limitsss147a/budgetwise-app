@@ -17,8 +17,19 @@ jobs:
 
       - name: Sync Backend Files to hf-deploy
         run: |
+          # Clean up old routers folder if exists to avoid stale files
+          rm -rf hf-deploy/routers
+          
+          # Copy main server files
           cp backend/server.py hf-deploy/
           cp backend/requirements.txt hf-deploy/
+          cp backend/database.py hf-deploy/
+          cp backend/models.py hf-deploy/
+          cp backend/auth.py hf-deploy/
+          cp backend/startup.py hf-deploy/
+          
+          # Copy modular routers directory
+          cp -r backend/routers hf-deploy/
 
       - name: Push to Hugging Face
         env:

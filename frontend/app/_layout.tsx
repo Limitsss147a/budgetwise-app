@@ -101,7 +101,7 @@ function AuthGate() {
 
   useEffect(() => {
     if (isLoading) return;
-    const inAuth = segments[0] === 'login' || segments[0] === 'register';
+    const inAuth = segments[0] === 'login' || segments[0] === 'register' || segments[0] === 'forgot-password';
     if (!user && !inAuth) router.replace('/login');
     else if (user && inAuth) router.replace('/');
   }, [user, isLoading, segments]);
@@ -154,6 +154,7 @@ function AuthGate() {
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="login" />
         <Stack.Screen name="register" />
+        <Stack.Screen name="forgot-password" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="add-transaction" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
       </Stack>
